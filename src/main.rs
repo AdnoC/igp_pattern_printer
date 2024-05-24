@@ -1,6 +1,7 @@
 use std::{
     fs,
     io,
+    time::{Duration, Instant},
     path::PathBuf,
     error::Error,
     collections::HashMap,
@@ -11,7 +12,12 @@ use image::{
     Rgb,
     RgbImage,
 };
-use palette::rgb::Srgb;
+use crossterm::{
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{prelude::*, symbols::scrollbar, widgets::*};
 use colored::Colorize;
 use directories::ProjectDirs;
 
@@ -86,7 +92,7 @@ struct Config {
 }
 
 impl Config {
-    fn new(project_dir: PathBuf) -> Result<Config, Box<dyn Error>> {
+    fn load(project_dir: PathBuf) -> Result<Config, Box<dyn Error>> {
         let color_path = project_dir.join("colors.ron");
         let progress_path = project_dir.join("progress.ron");
 
@@ -126,6 +132,11 @@ impl Config {
     }
 }
 
+struct App<'a> {
+    scroll: ScrollbarState,
+    progress: &'a mut Progress
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let mut args = std::env::args();
     args.next();
@@ -139,12 +150,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(proj_dirs) => proj_dirs.config_dir().to_owned(),
         None => return Err("Could not find config directory".into()),
     };
+    let mut config = Config::load(project_dir)?;
 
     let img = ImageReader::open(file)?.decode()?.to_rgb8();
-    let mut color_map = ColorMap::new();
 
-    let rows = build_rows(img, &mut color_map)?;
+    let rows = build_rows(img, &mut config.color_map)?;
 
+    let mut term = setup_tui()?;
+    run_app(&mut term, &mut config, rows)?;
+    teardown_tui(term)?;
     Ok(())
 }
 
@@ -167,6 +181,54 @@ fn build_rows(mut img: RgbImage, color_map: &mut ColorMap) -> Result<Vec<Vec<Rgb
     }
     Ok(rows)
 }
+
+fn setup_tui() -> Result<Terminal<impl Backend + io::Write>, Box<dyn Error>>{
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+    Ok(Terminal::new(backend)?)
+}
+
+fn teardown_tui(mut term: Terminal<impl Backend + io::Write>) -> Result<(), Box<dyn Error>> {
+    disable_raw_mode()?;
+    execute!(term.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    term.show_cursor()?;
+
+    Ok(())
+}
+
+fn run_app(term: &mut Terminal<impl Backend>, config: &mut Config, rows: Vec<Vec<Rgb8>>) -> Result<(), Box<dyn Error>> {
+    let mut app = App {
+        scroll: ScrollbarState::default(),
+        progress: &mut config.progress
+    };
+    let tick_rate = Duration::from_millis(250);
+    let mut last_tick = Instant::now();
+
+    loop {
+        term.draw(|f| ui(f, &mut app))?;
+
+        let timeout = tick_rate.saturating_sub(last_tick.elapsed());
+        if crossterm::event::poll(timeout)? {
+            if let Event::Key(key) = event::read()? {
+                // handle input
+            }
+        }
+        if last_tick.elapsed() >= tick_rate {
+            last_tick = Instant::now();
+        }
+    }
+}
+
+fn ui(f: &mut Frame, app: &mut App) {
+    f.render_stateful_widget()
+
+}
+
 
 fn print_grid(rows: Vec<Vec<Rgb8>>, color_map: &mut ColorMap) {
     for (row_idx, row) in rows.into_iter().enumerate() {
