@@ -251,6 +251,7 @@ fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
                 |c| Span::styled(color_map.map(*c), Color::Rgb(c.0[0], c.0[1], c.0[2]))
             ).collect::<Vec<_>>()
         )).collect::<Vec<_>>();
+    app.scroll = app.scroll.content_length(app.lines.iter().map(|row| row.len()).max().unwrap_or(0));
     let para = Paragraph::new(text)
         .scroll((app.scroll_amount as u16, 0));
     f.render_widget(para, layout[0]);
