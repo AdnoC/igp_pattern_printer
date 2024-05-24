@@ -216,9 +216,9 @@ fn run_app(term: &mut Terminal<impl Backend>, config: &mut Config, rows: Vec<Vec
         lines
     };
     let mut app = App {
-        lines,
         scroll: ScrollbarState::default(),
-        scroll_amount: 0,
+        scroll_amount: lines[2].len(),
+        lines,
         progress: &mut config.progress
     };
     let tick_rate = Duration::from_millis(250);
@@ -232,6 +232,8 @@ fn run_app(term: &mut Terminal<impl Backend>, config: &mut Config, rows: Vec<Vec
             if let Event::Key(key) = event::read()? {
                 match key.code {
                     KeyCode::Char('q') => return Ok(()),
+                    KeyCode::Char('h') => app.scroll_amount -= 1,
+                    KeyCode::Char('l') => app.scroll_amount += 1,
                     _ => {}
                 }
                 // handle input
