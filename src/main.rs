@@ -1,19 +1,22 @@
 use std::{
+    fs,
     io,
+    path::PathBuf,
     error::Error,
     collections::HashMap,
 };
+use serde::{Serialize, Deserialize};
 use image::{
     io::Reader as ImageReader,
     Rgb,
     RgbImage,
 };
+use palette::rgb::Srgb;
 use colored::Colorize;
-
-type Rgb8 = Rgb<u8>;
+use directories::ProjectDirs;
 
 // The "Outline" color. Default is this.
-const SEPARATOR_COLOR: Rgb8 = Rgb([32, 32, 32]);
+const SEPARATOR_COLOR: Rgb8 = Rgb8([32, 32, 32]);
 
 fn rgb8_to_true(rgb: Rgb8) -> colored::Color {
     colored::Color::TrueColor {
@@ -23,6 +26,18 @@ fn rgb8_to_true(rgb: Rgb8) -> colored::Color {
     }
 }
 
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, PartialOrd, Clone, Copy, Debug)]
+struct Rgb8([u8; 3]);
+trait ToRgb8 {
+    fn to_rgb8(self) -> Rgb8;
+}
+impl ToRgb8 for Rgb<u8> {
+    fn to_rgb8(self) -> Rgb8 {
+        Rgb8(self.0)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 struct ColorMap {
     color_map: HashMap<Rgb8, String>,
 }
@@ -57,6 +72,60 @@ impl ColorMap {
     }
 }
 
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, PartialOrd, Clone, Debug)]
+struct Progress {
+    row: usize,
+    col: usize,
+}
+
+struct Config {
+    color_path: PathBuf,
+    progress_path: PathBuf,
+    color_map: ColorMap,
+    progress: Progress,
+}
+
+impl Config {
+    fn new(project_dir: PathBuf) -> Result<Config, Box<dyn Error>> {
+        let color_path = project_dir.join("colors.ron");
+        let progress_path = project_dir.join("progress.ron");
+
+        if !project_dir.exists() {
+            fs::create_dir_all(project_dir)?;
+        }
+
+        let color_map = if color_path.exists() {
+            let cm_str = fs::read_to_string(&color_path)?;
+            ron::from_str(&cm_str)?
+        } else {
+            ColorMap::new()
+        };
+
+        let progress = if progress_path.exists() {
+            let prog_str = fs::read_to_string(&progress_path)?;
+            ron::from_str(&prog_str)?
+        } else {
+            Progress {
+                row: 0,col: 0,
+            }
+        };
+
+        Ok(Config {
+            color_path,
+            progress_path,
+            color_map,
+            progress
+        })
+    }
+
+    fn save(&self) -> Result<(), Box<dyn Error>> {
+        fs::write(&self.color_path, ron::to_string(&self.color_map)?)?;
+        fs::write(&self.progress_path, ron::to_string(&self.progress)?)?;
+        Ok(())
+
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let mut args = std::env::args();
     args.next();
@@ -66,12 +135,40 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
     println!("Opening file {}", file);
 
+    let project_dir = match ProjectDirs::from("page", "adno", "igp_pattern_printer") {
+        Some(proj_dirs) => proj_dirs.config_dir().to_owned(),
+        None => return Err("Could not find config directory".into()),
+    };
+
     let img = ImageReader::open(file)?.decode()?.to_rgb8();
     let mut color_map = ColorMap::new();
 
     let rows = build_rows(img, &mut color_map)?;
 
-    let (_, term_width) = termion.terminal_size()?;
+    Ok(())
+}
+
+fn build_rows(mut img: RgbImage, color_map: &mut ColorMap) -> Result<Vec<Vec<Rgb8>>, Box<dyn Error>> {
+    let mut rows: Vec<Vec<Rgb8>> = vec![];
+    let mut current_row: Vec<Rgb8> = vec![];
+    for y in 0..(img.height()) {
+        for x in 0..(img.width()) {
+            if img[(x, y)].to_rgb8() == SEPARATOR_COLOR {
+                continue;
+            }
+            current_row.push(img[(x, y)].to_rgb8());
+            color_map.ensure_mapped(img[(x, y)].to_rgb8())?;
+            flood_fill(&mut img, (x, y));
+        }
+        if !current_row.is_empty() {
+            rows.push(current_row);
+            current_row = vec![];
+        }
+    }
+    Ok(rows)
+}
+
+fn print_grid(rows: Vec<Vec<Rgb8>>, color_map: &mut ColorMap) {
     for (row_idx, row) in rows.into_iter().enumerate() {
         if row_idx % 2 == 1 {
             print!(" ");
@@ -84,34 +181,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         println!();
     }
-    Ok(())
-}
-
-fn build_rows(mut img: RgbImage, color_map: &mut ColorMap) -> Result<Vec<Vec<Rgb8>>, Box<dyn Error>> {
-    let mut rows: Vec<Vec<Rgb8>> = vec![];
-    let mut current_row: Vec<Rgb8> = vec![];
-    for y in 0..(img.height()) {
-        for x in 0..(img.width()) {
-            if img[(x, y)] == SEPARATOR_COLOR {
-                continue;
-            }
-            current_row.push(img[(x, y)]);
-            color_map.ensure_mapped(img[(x, y)])?;
-            flood_fill(&mut img, (x, y));
-        }
-        if !current_row.is_empty() {
-            rows.push(current_row);
-            current_row = vec![];
-        }
-    }
-    Ok(rows)
 }
 
 fn flood_fill(img: &mut RgbImage, (x, y): (u32, u32)) {
-    if img[(x, y)] == SEPARATOR_COLOR {
+    if img[(x, y)].to_rgb8() == SEPARATOR_COLOR {
         return
     }
-    img[(x, y)] = SEPARATOR_COLOR;
+    img[(x, y)] = Rgb(SEPARATOR_COLOR.0);
 
     if x > 0 {
         flood_fill(img, (x - 1, y));
