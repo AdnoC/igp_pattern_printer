@@ -112,7 +112,7 @@ impl Config {
             ron::from_str(&prog_str)?
         } else {
             Progress {
-                row: 0,col: 0,
+                row: 3, col: 0,
             }
         };
 
@@ -133,7 +133,9 @@ impl Config {
 }
 
 struct App<'a> {
+    lines: [Vec<Rgb8>; 3],
     scroll: ScrollbarState,
+    scroll_amount: usize,
     progress: &'a mut Progress
 }
 
@@ -155,7 +157,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let img = ImageReader::open(file)?.decode()?.to_rgb8();
 
     let rows = build_rows(img, &mut config.color_map)?;
-
+    //print_grid(rows, &mut config.color_map);
     let mut term = setup_tui()?;
     run_app(&mut term, &mut config, rows)?;
     teardown_tui(term)?;
@@ -202,19 +204,36 @@ fn teardown_tui(mut term: Terminal<impl Backend + io::Write>) -> Result<(), Box<
 }
 
 fn run_app(term: &mut Terminal<impl Backend>, config: &mut Config, rows: Vec<Vec<Rgb8>>) -> Result<(), Box<dyn Error>> {
+    let lines = {
+        let mut lines: [Vec<Rgb8>; 3] = [rows[config.progress.row - 2].clone(), rows[config.progress.row - 1].clone(), vec![]];
+        let row = &rows[config.progress.row];
+        for x in 0..=(config.progress.col) {
+            if x >= row.len() {
+                continue
+            }
+            lines[2].push(row[x]);
+        }
+        lines
+    };
     let mut app = App {
+        lines,
         scroll: ScrollbarState::default(),
+        scroll_amount: 0,
         progress: &mut config.progress
     };
     let tick_rate = Duration::from_millis(250);
     let mut last_tick = Instant::now();
 
     loop {
-        term.draw(|f| ui(f, &mut app))?;
+        term.draw(|f| ui(f, &mut app, &config.color_map))?;
 
         let timeout = tick_rate.saturating_sub(last_tick.elapsed());
         if crossterm::event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
+                match key.code {
+                    KeyCode::Char('q') => return Ok(()),
+                    _ => {}
+                }
                 // handle input
             }
         }
@@ -224,9 +243,25 @@ fn run_app(term: &mut Terminal<impl Backend>, config: &mut Config, rows: Vec<Vec
     }
 }
 
-fn ui(f: &mut Frame, app: &mut App) {
-    f.render_stateful_widget()
+fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
+    let layout = Layout::vertical([Constraint::Percentage(75), Constraint::Percentage(25)])
+        .split(f.size());
+    let text = app.lines.iter().map(
+        |row| Line::from(row.iter().map(
+                |c| Span::styled(color_map.map(*c), Color::Rgb(c.0[0], c.0[1], c.0[2]))
+            ).collect::<Vec<_>>()
+        )).collect::<Vec<_>>();
+    let para = Paragraph::new(text)
+        .scroll((app.scroll_amount as u16, 0));
+    f.render_widget(para, layout[0]);
+    f.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
+        layout[0].inner(&Margin {
+            vertical: 0,horizontal: 1,
+        }),&mut app.scroll
+    );
 
+    f.render_widget(Paragraph::new("Hellow"), layout[1]);
 }
 
 
