@@ -358,6 +358,7 @@ fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
     }
 
     let create_block = |title: &'static str| Block::bordered().gray().title(title.bold());
+    let create_block_owned = |title: String| Block::bordered().gray().title(title.bold());
 
     let text = app
         .lines
@@ -400,10 +401,9 @@ fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
         &mut app.vertical_scroll,
     );
 
-    append_to_log(format!("Lines:\n{:#?}\n\n", app.lines));
     let current_color = app.lines.last().and_then(|r| r.last()).unwrap();
     let current_canvas = Canvas::default()
-        .block(create_block("Current link"))
+        .block(create_block_owned(format!("Current link: {}", color_map.full_name(*current_color))))
         .background_color(Color::Rgb(current_color.0[0], current_color.0[1], current_color.0[2]))
         .x_bounds([
             0., current_color_box.width as f64
@@ -417,7 +417,7 @@ fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
     if let Some(next_color) = app.next_pixel {
         let nc = next_color.0.clone();
         let next_canvas = Canvas::default()
-            .block(create_block("Next link"))
+            .block(create_block_owned(format!("Next link: {}", color_map.full_name(next_color))))
             .background_color(Color::Rgb(nc[0], nc[1], nc[2]))
             .x_bounds([
             0., next_color_box.width as f64
