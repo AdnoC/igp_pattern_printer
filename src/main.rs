@@ -342,17 +342,37 @@ fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
 
     {
         if app.ensure_current_on_screen {
-            let visible_rows = image_frame.height as usize;
-            let total_rows = app.lines.len();
-            let current_scroll = app.vertical_scroll_amount;
-            let top_visible_row = current_scroll;
-            let bottom_visible_row = visible_rows + current_scroll;
-            // If the current row is above the screen
-            if top_visible_row > total_rows {
-                app.vertical_scroll_amount = total_rows - 1;
-            // If the current row is below the screen
-            } else if bottom_visible_row < total_rows {
-                app.vertical_scroll_amount = total_rows - visible_rows + 1;
+            // vertical
+            {
+                let visible_rows = image_frame.height as usize;
+                let total_rows = app.lines.len();
+                let current_scroll = app.vertical_scroll_amount;
+                let top_visible_row = current_scroll;
+                let bottom_visible_row = visible_rows + current_scroll;
+                // If the current row is above the screen
+                if top_visible_row + 2 > total_rows {
+                    app.vertical_scroll_amount = total_rows - 1;
+                    append_to_log("Line is above. updating vert scroll").unwrap();
+                // If the current row is below the screen
+                } else if bottom_visible_row < total_rows + 2 {
+                    app.vertical_scroll_amount = total_rows - visible_rows + 2;
+                    append_to_log("Line is below. updating vert scroll").unwrap();
+                }
+            }
+            // horizontal
+            {
+                let visible_rows = image_frame.width as usize;
+                let total_rows = app.lines.iter().map(|l| l.len()).max().unwrap_or(0);
+                let current_scroll = app.horizontal_scroll_amount;
+                let top_visible_row = current_scroll;
+                let bottom_visible_row = visible_rows + current_scroll;
+                // If the current row is above the screen
+                if top_visible_row > total_rows {
+                    app.horizontal_scroll_amount = total_rows - 1;
+                // If the current row is below the screen
+                } else if bottom_visible_row < total_rows {
+                    app.horizontal_scroll_amount = total_rows - visible_rows + 1;
+                }
             }
         }
         app.ensure_current_on_screen = false;
