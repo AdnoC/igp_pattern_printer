@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
@@ -363,14 +364,18 @@ fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
     let text = app
         .lines
         .iter()
-        .map(|row| {
-            Line::from(
-                row.iter()
-                    .map(|c| {
-                        Span::styled(color_map.one_char(*c), Color::Rgb(c.0[0], c.0[1], c.0[2]))
-                    })
-                    .collect::<Vec<_>>(),
-            )
+        .enumerate()
+        .map(|(row_idx, row)| {
+            let mut line = row.iter()
+                .map(|c| {
+                    Span::styled(color_map.one_char(*c), Color::Rgb(c.0[0], c.0[1], c.0[2]))
+                })
+                .intersperse(Span::raw(" "))
+                .collect::<Vec<_>>();
+            if row_idx % 2 == 1 {
+                line.insert(0, Span::raw(" "));
+            }
+            Line::from(line)
         })
         .collect::<Vec<_>>();
     app.vertical_scroll = app

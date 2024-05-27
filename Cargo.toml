@@ -10,6 +10,7 @@ colored = "2.1.0"
 crossterm = "0.27.0"
 directories = "5.0.1"
 image = "0.25.1"
+itertools = "0.13.0"
 palette = { version = "0.7.6", features = ["serializing"] }
 ratatui = "0.26.3"
 ron = "0.8.1"
