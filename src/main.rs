@@ -1,26 +1,20 @@
-use std::{
-    ffi::OsStr,
-    fs,
-    io,
-    time::{Duration, Instant},
-    path::{Path, PathBuf},
-    error::Error,
-    collections::HashMap,
-};
-use serde::{Serialize, Deserialize};
-use image::{
-    io::Reader as ImageReader,
-    Rgb,
-    RgbImage,
-};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{prelude::*, symbols::scrollbar, widgets::*};
-use colored::Colorize;
 use directories::ProjectDirs;
+use image::{io::Reader as ImageReader, Rgb, RgbImage};
+use ratatui::{prelude::*, symbols::scrollbar, widgets::*};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    error::Error,
+    ffi::OsStr,
+    fs, io,
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
 
 // The "Outline" color. Default is this.
 const SEPARATOR_COLOR: Rgb8 = Rgb8([32, 32, 32]);
@@ -59,10 +53,11 @@ impl ColorMap {
     }
 
     fn ensure_mapped(&mut self, color: Rgb8) -> Result<(), Box<dyn Error>> {
+        use colored::Colorize;
         use io::Write;
 
         if self.full_names.contains_key(&color) {
-            return Ok(())
+            return Ok(());
         }
         let colored_rgb = format!("{:?}", color)
             .color(rgb8_to_true(color))
@@ -76,7 +71,8 @@ impl ColorMap {
         print!("Please give it a 1 character description: ");
         io::stdout().flush()?;
         io::stdin().read_line(&mut name)?;
-        self.short_char.insert(color, name.trim().chars().nth(0).unwrap().to_string());
+        self.short_char
+            .insert(color, name.trim().chars().nth(0).unwrap().to_string());
         Ok(())
     }
 
@@ -96,13 +92,11 @@ struct Progress {
 }
 impl Progress {
     fn new() -> Self {
-        Progress {
-            row: 7, col: 10
-        }
+        Progress { row: 3, col: 0 }
     }
     fn reset(&mut self) {
-        self.row = 7;
-        self.col = 10;
+        self.row = 3;
+        self.col = 0;
     }
 }
 
@@ -114,7 +108,10 @@ struct Config {
 }
 
 impl Config {
-    fn load(project_dir: PathBuf, pattern_file: impl AsRef<Path>) -> Result<Config, Box<dyn Error>> {
+    fn load(
+        project_dir: PathBuf,
+        pattern_file: impl AsRef<Path>,
+    ) -> Result<Config, Box<dyn Error>> {
         let pattern_path = pattern_file.as_ref();
         let mut config_filename = pattern_path.file_name().unwrap().to_owned();
         config_filename.push(OsStr::new(".config.ron"));
@@ -125,7 +122,8 @@ impl Config {
             fs::create_dir_all(project_dir)?;
         }
 
-        let mut config: Config = fs::read_to_string(&config_path).ok()
+        let mut config: Config = fs::read_to_string(&config_path)
+            .ok()
             .and_then(|s| ron::from_str(&s).ok())
             .unwrap_or(Config {
                 config_path: config_path.clone(),
@@ -134,19 +132,18 @@ impl Config {
             });
         config.config_path = config_path;
 
-
         Ok(config)
     }
 
     fn save(&self) -> Result<(), Box<dyn Error>> {
         fs::write(&self.config_path, ron::to_string(&self)?)?;
         Ok(())
-
     }
 }
 
 struct App<'a> {
     lines: Vec<Vec<Rgb8>>,
+    next_pixel: Option<Rgb8>,
     vertical_scroll: ScrollbarState,
     vertical_scroll_amount: usize,
     horizontal_scroll: ScrollbarState,
@@ -163,11 +160,20 @@ impl<'a> App<'a> {
             self.progress.col = 0;
             self.lines.push(vec![]);
         }
-        self.lines.last_mut().unwrap().push(rows[self.progress.row][self.progress.col]);
+        self.lines
+            .last_mut()
+            .unwrap()
+            .push(rows[self.progress.row][self.progress.col]);
+        self.next_pixel = if self.progress.col + 1 < rows[self.progress.row].len() {
+            Some(rows[self.progress.row][self.progress.col + 1])
+        } else {
+            None
+        };
     }
 
     fn is_done(&self, rows: &Vec<Vec<Rgb8>>) -> bool {
-        self.progress.row >= (rows.len() - 1) && self.progress.col >= rows.last().map(|r| r.len()).unwrap_or(1) - 1
+        self.progress.row >= (rows.len() - 1)
+            && self.progress.col >= rows.last().map(|r| r.len()).unwrap_or(1) - 1
     }
 }
 
@@ -199,7 +205,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn build_rows(mut img: RgbImage, color_map: &mut ColorMap) -> Result<Vec<Vec<Rgb8>>, Box<dyn Error>> {
+fn build_rows(
+    mut img: RgbImage,
+    color_map: &mut ColorMap,
+) -> Result<Vec<Vec<Rgb8>>, Box<dyn Error>> {
     let mut rows: Vec<Vec<Rgb8>> = vec![];
     let mut current_row: Vec<Rgb8> = vec![];
     for y in 0..(img.height()) {
@@ -219,7 +228,7 @@ fn build_rows(mut img: RgbImage, color_map: &mut ColorMap) -> Result<Vec<Vec<Rgb
     Ok(rows)
 }
 
-fn setup_tui() -> Result<Terminal<impl Backend + io::Write>, Box<dyn Error>>{
+fn setup_tui() -> Result<Terminal<impl Backend + io::Write>, Box<dyn Error>> {
     enable_raw_mode()?;
     let stdout = io::stdout();
     let mut backend = CrosstermBackend::new(stdout);
@@ -230,7 +239,8 @@ fn setup_tui() -> Result<Terminal<impl Backend + io::Write>, Box<dyn Error>>{
 
 fn teardown_tui(mut term: Terminal<impl Backend + io::Write>) -> Result<(), Box<dyn Error>> {
     disable_raw_mode()?;
-    execute!(term.backend_mut(),
+    execute!(
+        term.backend_mut(),
         LeaveAlternateScreen,
         DisableMouseCapture
     )?;
@@ -239,13 +249,28 @@ fn teardown_tui(mut term: Terminal<impl Backend + io::Write>) -> Result<(), Box<
     Ok(())
 }
 
-fn run_app(term: &mut Terminal<impl Backend>, config: &mut Config, rows: Vec<Vec<Rgb8>>) -> Result<(), Box<dyn Error>> {
+fn run_app(
+    term: &mut Terminal<impl Backend>,
+    config: &mut Config,
+    rows: Vec<Vec<Rgb8>>,
+) -> Result<(), Box<dyn Error>> {
     fn initialize_lines(progress: &Progress, rows: &Vec<Vec<Rgb8>>) -> Vec<Vec<Rgb8>> {
-        let mut lines: Vec<Vec<Rgb8>> = rows.iter().take(progress.row - 1).cloned().collect();
-        lines.push(rows[progress.row - 1].iter().take(progress.col).cloned().collect());
+        let mut lines: Vec<Vec<Rgb8>> = rows.iter().take(progress.row).cloned().collect();
+        lines.push(
+            rows[progress.row - 1]
+                .iter()
+                .take(progress.col + 1)
+                .cloned()
+                .collect(),
+        );
         lines
     }
     let lines = initialize_lines(&config.progress, &rows);
+    let next_pixel = if config.progress.col + 1 < rows[config.progress.row].len() {
+        Some(rows[config.progress.row][config.progress.col + 1])
+    } else {
+        None
+    };
     let mut app = App {
         horizontal_scroll: ScrollbarState::new(rows.iter().map(|r| r.len()).max().unwrap()),
         horizontal_scroll_amount: 0, //lines.last().unwrap().len(),
@@ -253,9 +278,10 @@ fn run_app(term: &mut Terminal<impl Backend>, config: &mut Config, rows: Vec<Vec
         vertical_scroll_amount: 0, //lines.len(),
         ensure_current_on_screen: false,
         lines,
-        progress: &mut config.progress
+        next_pixel,
+        progress: &mut config.progress,
     };
-    let tick_rate = Duration::from_millis(550);
+    let tick_rate = Duration::from_millis(250);
     let mut last_tick = Instant::now();
 
     loop {
@@ -264,21 +290,32 @@ fn run_app(term: &mut Terminal<impl Backend>, config: &mut Config, rows: Vec<Vec
         let timeout = tick_rate.saturating_sub(last_tick.elapsed());
         if crossterm::event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
                 match key.code {
                     KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Char('h') => if app.horizontal_scroll_amount > 0{
-                        app.horizontal_scroll_amount -= 1
-                    },
+                    KeyCode::Char('h') => {
+                        if app.horizontal_scroll_amount > 0 {
+                            app.horizontal_scroll_amount -= 1
+                        }
+                    }
                     KeyCode::Char('j') => app.vertical_scroll_amount += 1,
-                    KeyCode::Char('k') => if app.vertical_scroll_amount > 0 {
-                        app.vertical_scroll_amount -= 1
-                    },
+                    KeyCode::Char('k') => {
+                        if app.vertical_scroll_amount > 0 {
+                            app.vertical_scroll_amount -= 1
+                        }
+                    }
                     KeyCode::Char('l') => app.horizontal_scroll_amount += 1,
                     KeyCode::Char('r') => {
                         app.progress.reset();
                         app.lines = initialize_lines(&app.progress, &rows);
-                    },
-                    KeyCode::Char(' ') => if key.kind == KeyEventKind::Press && !app.is_done(&rows) { app.tick(&rows) },
+                    }
+                    KeyCode::Char(' ') => {
+                        if !app.is_done(&rows) {
+                            app.tick(&rows)
+                        }
+                    }
                     _ => {}
                 }
                 // handle input
@@ -291,12 +328,20 @@ fn run_app(term: &mut Terminal<impl Backend>, config: &mut Config, rows: Vec<Vec
 }
 
 fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
-    let layout = Layout::vertical([Constraint::Percentage(75), Constraint::Percentage(25)])
-        .split(f.size());
+    use ratatui::widgets::canvas::{Canvas, Rectangle, Map, MapResolution};
+
+    let main_layout = Layout::vertical([
+        Constraint::Percentage(70),
+        Constraint::Percentage(30),
+        Constraint::Min(1),
+    ]);
+    let [image_frame, color_frame, instruction_line] = main_layout.areas(f.size());
+    let colors_layout = Layout::horizontal([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)]);
+    let [current_color_box, next_color_box] = colors_layout.areas(color_frame);
 
     {
         if app.ensure_current_on_screen {
-            let visible_rows = layout[0].height as usize;
+            let visible_rows = image_frame.height as usize;
             let total_rows = app.lines.len();
             let current_scroll = app.vertical_scroll_amount;
             let top_visible_row = current_scroll;
@@ -308,48 +353,102 @@ fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
             } else if bottom_visible_row < total_rows {
                 app.vertical_scroll_amount = total_rows - visible_rows + 1;
             }
-
         }
         app.ensure_current_on_screen = false;
     }
 
-    let text = app.lines.iter().map(
-        |row| Line::from(row.iter().map(
-                |c| Span::styled(color_map.one_char(*c), Color::Rgb(c.0[0], c.0[1], c.0[2]))
-            ).collect::<Vec<_>>()
-        )).collect::<Vec<_>>();
-    app.vertical_scroll = app.vertical_scroll
+    let create_block = |title: &'static str| Block::bordered().gray().title(title.bold());
+
+    let text = app
+        .lines
+        .iter()
+        .map(|row| {
+            Line::from(
+                row.iter()
+                    .map(|c| {
+                        Span::styled(color_map.one_char(*c), Color::Rgb(c.0[0], c.0[1], c.0[2]))
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect::<Vec<_>>();
+    app.vertical_scroll = app
+        .vertical_scroll
         .content_length(app.lines.len())
         .position(app.vertical_scroll_amount);
     app.horizontal_scroll = app.horizontal_scroll.position(app.horizontal_scroll_amount);
 
-    let para = Paragraph::new(text)
-        .scroll((app.vertical_scroll_amount as u16, app.horizontal_scroll_amount as u16));
-    f.render_widget(para, layout[0]);
+    let para = Paragraph::new(text).block(create_block("Pattern")).scroll((
+        app.vertical_scroll_amount as u16,
+        app.horizontal_scroll_amount as u16,
+    ));
+    f.render_widget(para, image_frame);
     f.render_stateful_widget(
         Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
-        layout[0].inner(&Margin {
-            vertical: 0,horizontal: 1,
-        }),&mut app.horizontal_scroll
+        image_frame.inner(&Margin {
+            vertical: 0,
+            horizontal: 1,
+        }),
+        &mut app.horizontal_scroll,
     );
     f.render_stateful_widget(
         Scrollbar::new(ScrollbarOrientation::VerticalRight),
-        layout[0].inner(&Margin {
-            vertical: 1,horizontal: 0,
-        }),&mut app.vertical_scroll
+        image_frame.inner(&Margin {
+            vertical: 1,
+            horizontal: 0,
+        }),
+        &mut app.vertical_scroll,
     );
 
-    f.render_widget(Paragraph::new("Hellow"), layout[1]);
+    append_to_log(format!("Lines:\n{:#?}\n\n", app.lines));
+    let current_color = app.lines.last().and_then(|r| r.last()).unwrap();
+    let current_canvas = Canvas::default()
+        .block(create_block("Current link"))
+        .background_color(Color::Rgb(current_color.0[0], current_color.0[1], current_color.0[2]))
+        .x_bounds([
+            0., current_color_box.width as f64
+        ])
+        .y_bounds([
+            0., current_color_box.height as f64
+        ])
+        .paint(|_| { });
+    f.render_widget(current_canvas, current_color_box);
+
+    if let Some(next_color) = app.next_pixel {
+        let nc = next_color.0.clone();
+        let next_canvas = Canvas::default()
+            .block(create_block("Next link"))
+            .background_color(Color::Rgb(nc[0], nc[1], nc[2]))
+            .x_bounds([
+            0., next_color_box.width as f64
+            ])
+            .y_bounds([
+            0., next_color_box.height as f64
+            ])
+            .paint(move |_| { });
+        f.render_widget(next_canvas, next_color_box);
+    } else {
+        let next_para = Paragraph::new("End of line")
+            .block(create_block("Next link"));
+        f.render_widget(next_para, next_color_box);
+    }
+
+
+    let controls = Line::from(
+        "q: Quit | Space: Next link | h/j/k/l: Scroll left/down/up/right | r: Reset progress",
+    );
+    f.render_widget(controls, instruction_line);
 }
 
-
 fn print_grid(rows: Vec<Vec<Rgb8>>, color_map: &mut ColorMap) {
+    use colored::Colorize;
     for (row_idx, row) in rows.into_iter().enumerate() {
         if row_idx % 2 == 1 {
             print!(" ");
         }
         for p in row {
-            let colored_p = color_map.one_char(p)
+            let colored_p = color_map
+                .one_char(p)
                 .color(rgb8_to_true(p))
                 .on_color(rgb8_to_true(SEPARATOR_COLOR));
             print!("{} ", colored_p);
@@ -360,7 +459,7 @@ fn print_grid(rows: Vec<Vec<Rgb8>>, color_map: &mut ColorMap) {
 
 fn flood_fill(img: &mut RgbImage, (x, y): (u32, u32)) {
     if img[(x, y)].to_rgb8() == SEPARATOR_COLOR {
-        return
+        return;
     }
     img[(x, y)] = Rgb(SEPARATOR_COLOR.0);
 
@@ -387,7 +486,6 @@ fn append_to_log<T: ToString>(s: T) -> Result<(), Box<dyn Error>> {
         .append(true)
         .create(true)
         .open("log")?;
-
 
     writeln!(file, "{}", s.to_string())?;
     Ok(())
