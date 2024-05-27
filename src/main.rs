@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -96,7 +96,7 @@ impl Progress {
         Progress { row: 3, col: 0 }
     }
     fn reset(&mut self) {
-        self.row = 3;
+        self.row = 2;
         self.col = 0;
     }
 }
@@ -274,9 +274,9 @@ fn run_app(
     };
     let mut app = App {
         horizontal_scroll: ScrollbarState::new(rows.iter().map(|r| r.len()).max().unwrap()),
-        horizontal_scroll_amount: 0, //lines.last().unwrap().len(),
+        horizontal_scroll_amount: (lines.last().unwrap().len() * 2).max(2) - 2,
         vertical_scroll: ScrollbarState::default(),
-        vertical_scroll_amount: 0, //lines.len(),
+        vertical_scroll_amount: lines.len() - 3,
         ensure_current_on_screen: false,
         lines,
         next_pixel,
@@ -296,28 +296,29 @@ fn run_app(
                 }
                 match key.code {
                     KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Char('h') => {
+                    KeyCode::Left | KeyCode::Char('h') => {
                         if app.horizontal_scroll_amount > 0 {
                             app.horizontal_scroll_amount -= 1
                         }
-                    }
-                    KeyCode::Char('j') => app.vertical_scroll_amount += 1,
-                    KeyCode::Char('k') => {
+                    },
+                    KeyCode::Down | KeyCode::Char('j') => app.vertical_scroll_amount += 1,
+                    KeyCode::Up | KeyCode::Char('k') => {
                         if app.vertical_scroll_amount > 0 {
                             app.vertical_scroll_amount -= 1
                         }
-                    }
-                    KeyCode::Char('l') => app.horizontal_scroll_amount += 1,
+                    },
+                    KeyCode::Right | KeyCode::Char('l') => app.horizontal_scroll_amount += 1,
                     KeyCode::Char('r') => {
                         app.progress.reset();
                         app.lines = initialize_lines(&app.progress, &rows);
-                    }
+                    },
                     KeyCode::Char(' ') => {
                         if !app.is_done(&rows) {
                             app.tick(&rows)
                         }
-                    }
-                    _ => {}
+                    },
+                    KeyCode::Char('P') => { for _ in 0..30 { app.tick(&rows);} },
+                    _ => {},
                 }
                 // handle input
             }
@@ -359,18 +360,17 @@ fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
             }
             // horizontal
             {
-                let visible_rows = image_frame.width as usize;
-                let total_rows = app.lines.last().map(|l| l.len()).unwrap_or(0) * 2;
+                let visible_cols = image_frame.width as usize;
+                let total_cols = app.lines.last().map(|l| l.len()).unwrap_or(0) * 2;
                 let current_scroll = app.horizontal_scroll_amount;
-                let top_visible_row = current_scroll;
-                let bottom_visible_row = visible_rows + current_scroll;
-                append_to_log(format!("vis: {}, tot: {}, cur: {}, top: {}, bot: {}", visible_rows, total_rows, current_scroll, top_visible_row, bottom_visible_row)).unwrap();
-                // If the current row is above the screen
-                if top_visible_row > total_rows {
-                    app.horizontal_scroll_amount = total_rows - 1;
-                // If the current row is below the screen
-                } else if bottom_visible_row < total_rows {
-                    app.horizontal_scroll_amount = total_rows - visible_rows + 1;
+                let right_visible_col = current_scroll;
+                let left_visible_col = visible_cols + current_scroll;
+                // If the current col is right of the screen
+                if right_visible_col > total_cols {
+                    app.horizontal_scroll_amount = total_cols - 1;
+                // If the current col is left of the screen
+                } else if left_visible_col < total_cols {
+                    app.horizontal_scroll_amount = total_cols - visible_cols + 1;
                 }
             }
         }
@@ -459,7 +459,7 @@ fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
 
 
     let controls = Line::from(
-        "q: Quit | Space: Next link | h/j/k/l: Scroll left/down/up/right | r: Reset progress",
+        "q: Quit | Space: Next link | arrows/h/j/k/l: Scroll left/down/up/right | r: Reset progress",
     );
     f.render_widget(controls, instruction_line);
 }
