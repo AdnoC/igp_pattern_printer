@@ -144,19 +144,48 @@ impl Config {
 
 struct App<'a> {
     lines: Vec<Vec<Rgb8>>,
+    rows: Vec<Vec<Rgb8>>,
     next_pixel: Option<Rgb8>,
-    vertical_scroll: ScrollbarState,
-    vertical_scroll_amount: usize,
-    horizontal_scroll: ScrollbarState,
-    horizontal_scroll_amount: usize,
     ensure_current_on_screen: bool,
     progress: &'a mut Progress,
 }
 impl<'a> App<'a> {
-    fn tick(&mut self, rows: &Vec<Vec<Rgb8>>) {
+    fn initialize_lines(rows: &Vec<Vec<Rgb8>>, progress: &Progress) -> Vec<Vec<Rgb8>> {
+        let mut lines: Vec<Vec<Rgb8>> = rows.iter().take(progress.row).cloned().collect();
+        lines.push(
+            rows[progress.row - 1]
+                .iter()
+                .take(progress.col + 1)
+                .cloned()
+                .collect(),
+        );
+        lines
+    }
+
+    fn new(rows: Vec<Vec<Rgb8>>, progress: &'a mut Progress) -> App<'a> {
+        let lines = App::initialize_lines(&rows, progress);
+        let next_pixel = if progress.col + 1 < rows[progress.row].len() {
+            Some(rows[progress.row][progress.col + 1])
+        } else {
+            None
+        };
+        App {
+            ensure_current_on_screen: false,
+            lines,
+            rows,
+            next_pixel,
+            progress,
+        }
+
+    }
+}
+
+// Lifecycle methods
+impl<'a> App<'a> {
+    fn tick(&mut self) {
         self.ensure_current_on_screen = true;
         self.progress.col += 1;
-        if self.progress.col >= rows[self.progress.row].len() {
+        if self.progress.col >= self.rows[self.progress.row].len() {
             self.progress.row += 1;
             self.progress.col = 0;
             self.lines.push(vec![]);
@@ -164,17 +193,40 @@ impl<'a> App<'a> {
         self.lines
             .last_mut()
             .unwrap()
-            .push(rows[self.progress.row][self.progress.col]);
-        self.next_pixel = if self.progress.col + 1 < rows[self.progress.row].len() {
-            Some(rows[self.progress.row][self.progress.col + 1])
+            .push(self.rows[self.progress.row][self.progress.col]);
+        self.next_pixel = if self.progress.col + 1 < self.rows[self.progress.row].len() {
+            Some(self.rows[self.progress.row][self.progress.col + 1])
         } else {
             None
         };
     }
 
-    fn is_done(&self, rows: &Vec<Vec<Rgb8>>) -> bool {
-        self.progress.row >= (rows.len() - 1)
-            && self.progress.col >= rows.last().map(|r| r.len()).unwrap_or(1) - 1
+    fn reset(&mut self) {
+        self.progress.reset();
+        self.lines = App::initialize_lines(&self.rows, &self.progress);
+
+    }
+
+    fn is_done(&self) -> bool {
+        self.progress.row >= (self.rows.len() - 1)
+            && self.progress.col >= self.rows.last().map(|r| r.len()).unwrap_or(1) - 1
+    }
+}
+
+struct UIState {
+    vertical_scroll: ScrollbarState,
+    vertical_scroll_amount: usize,
+    horizontal_scroll: ScrollbarState,
+    horizontal_scroll_amount: usize,
+}
+impl UIState {
+    fn new(app: &App) -> UIState {
+        UIState {
+            horizontal_scroll: ScrollbarState::new(app.rows.iter().map(|r| r.len()).max().unwrap()),
+            horizontal_scroll_amount: (app.lines.last().unwrap().len() * 2).max(2) - 2,
+            vertical_scroll: ScrollbarState::default(),
+            vertical_scroll_amount: app.lines.len() - 3,
+        }
     }
 }
 
@@ -255,38 +307,13 @@ fn run_app(
     config: &mut Config,
     rows: Vec<Vec<Rgb8>>,
 ) -> Result<(), Box<dyn Error>> {
-    fn initialize_lines(progress: &Progress, rows: &Vec<Vec<Rgb8>>) -> Vec<Vec<Rgb8>> {
-        let mut lines: Vec<Vec<Rgb8>> = rows.iter().take(progress.row).cloned().collect();
-        lines.push(
-            rows[progress.row - 1]
-                .iter()
-                .take(progress.col + 1)
-                .cloned()
-                .collect(),
-        );
-        lines
-    }
-    let lines = initialize_lines(&config.progress, &rows);
-    let next_pixel = if config.progress.col + 1 < rows[config.progress.row].len() {
-        Some(rows[config.progress.row][config.progress.col + 1])
-    } else {
-        None
-    };
-    let mut app = App {
-        horizontal_scroll: ScrollbarState::new(rows.iter().map(|r| r.len()).max().unwrap()),
-        horizontal_scroll_amount: (lines.last().unwrap().len() * 2).max(2) - 2,
-        vertical_scroll: ScrollbarState::default(),
-        vertical_scroll_amount: lines.len() - 3,
-        ensure_current_on_screen: false,
-        lines,
-        next_pixel,
-        progress: &mut config.progress,
-    };
+    let mut app = App::new(rows, &mut config.progress);
+    let mut ui_state = UIState::new(&app);
     let tick_rate = Duration::from_millis(250);
     let mut last_tick = Instant::now();
 
     loop {
-        term.draw(|f| ui(f, &mut app, &config.color_map))?;
+        term.draw(|f| ui(f, &mut app, &mut ui_state, &config.color_map))?;
 
         let timeout = tick_rate.saturating_sub(last_tick.elapsed());
         if crossterm::event::poll(timeout)? {
@@ -297,27 +324,26 @@ fn run_app(
                 match key.code {
                     KeyCode::Char('q') => return Ok(()),
                     KeyCode::Left | KeyCode::Char('h') => {
-                        if app.horizontal_scroll_amount > 0 {
-                            app.horizontal_scroll_amount -= 1
+                        if ui_state.horizontal_scroll_amount > 0 {
+                            ui_state.horizontal_scroll_amount -= 1
                         }
                     },
-                    KeyCode::Down | KeyCode::Char('j') => app.vertical_scroll_amount += 1,
+                    KeyCode::Down | KeyCode::Char('j') => ui_state.vertical_scroll_amount += 1,
                     KeyCode::Up | KeyCode::Char('k') => {
-                        if app.vertical_scroll_amount > 0 {
-                            app.vertical_scroll_amount -= 1
+                        if ui_state.vertical_scroll_amount > 0 {
+                            ui_state.vertical_scroll_amount -= 1
                         }
                     },
-                    KeyCode::Right | KeyCode::Char('l') => app.horizontal_scroll_amount += 1,
+                    KeyCode::Right | KeyCode::Char('l') => ui_state.horizontal_scroll_amount += 1,
                     KeyCode::Char('r') => {
-                        app.progress.reset();
-                        app.lines = initialize_lines(&app.progress, &rows);
+                        app.reset();
                     },
                     KeyCode::Char(' ') => {
-                        if !app.is_done(&rows) {
-                            app.tick(&rows)
+                        if !app.is_done() {
+                            app.tick()
                         }
                     },
-                    KeyCode::Char('P') => { for _ in 0..30 { app.tick(&rows);} },
+                    KeyCode::Char('P') => { for _ in 0..30 { app.tick();} },
                     _ => {},
                 }
                 // handle input
@@ -329,7 +355,7 @@ fn run_app(
     }
 }
 
-fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
+fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap) {
     use ratatui::widgets::canvas::{Canvas, Rectangle, Map, MapResolution};
 
     let main_layout = Layout::vertical([
@@ -347,30 +373,30 @@ fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
             {
                 let visible_rows = image_frame.height as usize;
                 let total_rows = app.lines.len();
-                let current_scroll = app.vertical_scroll_amount;
+                let current_scroll = ui_state.vertical_scroll_amount;
                 let top_visible_row = current_scroll;
                 let bottom_visible_row = visible_rows + current_scroll;
                 // If the current row is above the screen
                 if top_visible_row + 2 > total_rows {
-                    app.vertical_scroll_amount = total_rows - 1;
+                    ui_state.vertical_scroll_amount = total_rows - 1;
                 // If the current row is below the screen
                 } else if bottom_visible_row < total_rows + 2 {
-                    app.vertical_scroll_amount = total_rows - visible_rows + 2;
+                    ui_state.vertical_scroll_amount = total_rows - visible_rows + 2;
                 }
             }
             // horizontal
             {
                 let visible_cols = image_frame.width as usize;
                 let total_cols = app.lines.last().map(|l| l.len()).unwrap_or(0) * 2;
-                let current_scroll = app.horizontal_scroll_amount;
+                let current_scroll = ui_state.horizontal_scroll_amount;
                 let right_visible_col = current_scroll;
                 let left_visible_col = visible_cols + current_scroll;
                 // If the current col is right of the screen
                 if right_visible_col > total_cols {
-                    app.horizontal_scroll_amount = total_cols - 1;
+                    ui_state.horizontal_scroll_amount = total_cols - 1;
                 // If the current col is left of the screen
                 } else if left_visible_col < total_cols {
-                    app.horizontal_scroll_amount = total_cols - visible_cols + 1;
+                    ui_state.horizontal_scroll_amount = total_cols - visible_cols + 1;
                 }
             }
         }
@@ -397,15 +423,15 @@ fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
             Line::from(line)
         })
         .collect::<Vec<_>>();
-    app.vertical_scroll = app
+    ui_state.vertical_scroll = ui_state
         .vertical_scroll
         .content_length(app.lines.len())
-        .position(app.vertical_scroll_amount);
-    app.horizontal_scroll = app.horizontal_scroll.position(app.horizontal_scroll_amount);
+        .position(ui_state.vertical_scroll_amount);
+    ui_state.horizontal_scroll = ui_state.horizontal_scroll.position(ui_state.horizontal_scroll_amount);
 
     let para = Paragraph::new(text).block(create_block("Pattern")).scroll((
-        app.vertical_scroll_amount as u16,
-        app.horizontal_scroll_amount as u16,
+        ui_state.vertical_scroll_amount as u16,
+        ui_state.horizontal_scroll_amount as u16,
     ));
     f.render_widget(para, image_frame);
     f.render_stateful_widget(
@@ -414,7 +440,7 @@ fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
             vertical: 0,
             horizontal: 1,
         }),
-        &mut app.horizontal_scroll,
+        &mut ui_state.horizontal_scroll,
     );
     f.render_stateful_widget(
         Scrollbar::new(ScrollbarOrientation::VerticalRight),
@@ -422,7 +448,7 @@ fn ui(f: &mut Frame, app: &mut App, color_map: &ColorMap) {
             vertical: 1,
             horizontal: 0,
         }),
-        &mut app.vertical_scroll,
+        &mut ui_state.vertical_scroll,
     );
 
     let current_color = app.lines.last().and_then(|r| r.last()).unwrap();
