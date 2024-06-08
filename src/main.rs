@@ -93,11 +93,11 @@ struct Progress {
 }
 impl Progress {
     fn new() -> Self {
-        Progress { row: 3, col: 0 }
+        Progress { row: 2, col: 1 }
     }
     fn reset(&mut self) {
         self.row = 2;
-        self.col = 0;
+        self.col = 1;
     }
 }
 
@@ -151,15 +151,24 @@ struct App<'a> {
 }
 impl<'a> App<'a> {
     fn initialize_lines(rows: &Vec<Vec<Rgb8>>, progress: &Progress) -> Vec<Vec<Rgb8>> {
-        let mut lines: Vec<Vec<Rgb8>> = rows.iter().take(progress.row).cloned().collect();
-        lines.push(
-            rows[progress.row - 1]
-                .iter()
-                .take(progress.col + 1)
-                .cloned()
-                .collect(),
-        );
-        lines
+        if progress.row < 3 {
+            vec![
+                rows[0].iter().take(progress.col + 1).cloned().collect(),
+                rows[1].iter().take(progress.col).cloned().collect(),
+                rows[2].iter().take(progress.col + 1).cloned().collect(),
+            ]
+
+        } else {
+            let mut lines: Vec<Vec<Rgb8>> = rows.iter().take(progress.row).cloned().collect();
+            lines.push(
+                rows[progress.row - 1]
+                    .iter()
+                    .take(progress.col + 1)
+                    .cloned()
+                    .collect(),
+            );
+            lines
+        }
     }
 
     fn new(rows: Vec<Vec<Rgb8>>, progress: &'a mut Progress) -> App<'a> {
@@ -185,15 +194,23 @@ impl<'a> App<'a> {
     fn tick(&mut self) {
         self.ensure_current_on_screen = true;
         self.progress.col += 1;
-        if self.progress.col >= self.rows[self.progress.row].len() {
+        if self.is_done_with_line() {
             self.progress.row += 1;
             self.progress.col = 0;
             self.lines.push(vec![]);
         }
-        self.lines
-            .last_mut()
-            .unwrap()
-            .push(self.rows[self.progress.row][self.progress.col]);
+        if self.progress.row < 3 {
+            self.rows[0].get(self.lines[0].len()).map(|val| self.lines[0].push(*val));
+            self.rows[1].get(self.lines[1].len()).map(|val| self.lines[1].push(*val));
+            self.rows[2].get(self.lines[2].len()).map(|val| self.lines[2].push(*val));
+        } else {
+            if let Some(line) = self.lines.last_mut() {
+                self.rows[self.progress.row]
+                     .get(line.len())
+                     .map(|val| line.push(*val));
+            }
+        }
+
         self.next_pixel = if self.progress.col + 1 < self.rows[self.progress.row].len() {
             Some(self.rows[self.progress.row][self.progress.col + 1])
         } else {
@@ -210,6 +227,15 @@ impl<'a> App<'a> {
     fn is_done(&self) -> bool {
         self.progress.row >= (self.rows.len() - 1)
             && self.progress.col >= self.rows.last().map(|r| r.len()).unwrap_or(1) - 1
+    }
+
+    fn is_done_with_line(&self) -> bool {
+        if self.progress.row < 3 {
+            let max_len = self.rows[0].len().max(self.rows[1].len()).max(self.rows[2].len());
+            self.progress.col >= max_len
+        } else {
+            self.progress.col >= self.rows[self.progress.row].len()
+        }
     }
 }
 
