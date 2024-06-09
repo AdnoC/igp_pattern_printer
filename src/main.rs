@@ -142,10 +142,16 @@ impl Config {
     }
 }
 
+#[derive(Clone, Copy)]
+enum NextPreview {
+    Pixel(Option<Rgb8>),
+    Tri([Option<Rgb8>; 3])
+}
 struct App<'a> {
     lines: Vec<Vec<Rgb8>>,
     rows: Vec<Vec<Rgb8>>,
-    next_pixel: Option<Rgb8>,
+    current_pixel: NextPreview,
+    next_pixel: NextPreview,
     ensure_current_on_screen: bool,
     progress: &'a mut Progress,
 }
@@ -172,16 +178,31 @@ impl<'a> App<'a> {
     }
 
     fn new(rows: Vec<Vec<Rgb8>>, progress: &'a mut Progress) -> App<'a> {
+        use NextPreview::*;
         let lines = App::initialize_lines(&rows, progress);
-        let next_pixel = if progress.col + 1 < rows[progress.row].len() {
-            Some(rows[progress.row][progress.col + 1])
+        let next_pixel = if progress.row >= 3 {
+            Pixel(rows[progress.row].get(progress.col).copied())
         } else {
-            None
+            Tri([
+                rows[0].get(progress.col + 1).copied(),
+                rows[1].get(progress.col).copied(),
+                rows[2].get(progress.col + 1).copied(),
+            ])
+        };
+        let current_pixel = if progress.row >= 3 {
+            Pixel(rows[progress.row].get(progress.col - 1).copied())
+        } else {
+            Tri([
+                rows[0].get(progress.col).copied(),
+                rows[1].get(progress.col - 1).copied(),
+                rows[2].get(progress.col).copied(),
+            ])
         };
         App {
             ensure_current_on_screen: false,
             lines,
             rows,
+            current_pixel,
             next_pixel,
             progress,
         }
@@ -194,10 +215,12 @@ impl<'a> App<'a> {
     fn tick(&mut self) {
         self.ensure_current_on_screen = true;
         self.progress.col += 1;
+        self.current_pixel = self.next_pixel;
         if self.is_done_with_line() {
             self.progress.row += 1;
             self.progress.col = 0;
             self.lines.push(vec![]);
+            self.current_pixel = NextPreview::Pixel(self.rows.get(self.progress.row).and_then(|row| row.get(0).copied()));
         }
         if self.progress.row < 3 {
             self.rows[0].get(self.lines[0].len()).map(|val| self.lines[0].push(*val));
@@ -211,10 +234,14 @@ impl<'a> App<'a> {
             }
         }
 
-        self.next_pixel = if self.progress.col + 1 < self.rows[self.progress.row].len() {
-            Some(self.rows[self.progress.row][self.progress.col + 1])
+        self.next_pixel = if self.progress.row >= 3 {
+            NextPreview::Pixel(self.rows[self.progress.row].get(self.progress.col).copied())
         } else {
-            None
+            NextPreview::Tri([
+                self.rows[0].get(self.progress.col + 1).copied(),
+                self.rows[1].get(self.progress.col).copied(),
+                self.rows[2].get(self.progress.col + 1).copied(),
+            ])
         };
     }
 
@@ -278,9 +305,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     //print_grid(rows, &mut config.color_map);
     let mut term = setup_tui()?;
+    init_panic_hook();
     run_app(&mut term, &mut config, rows)?;
     config.save()?;
-    teardown_tui(term)?;
+    term.show_cursor()?;
+    teardown_tui()?;
     Ok(())
 }
 
@@ -316,16 +345,23 @@ fn setup_tui() -> Result<Terminal<impl Backend + io::Write>, Box<dyn Error>> {
     Ok(Terminal::new(backend)?)
 }
 
-fn teardown_tui(mut term: Terminal<impl Backend + io::Write>) -> Result<(), Box<dyn Error>> {
+fn teardown_tui() -> Result<(), Box<dyn Error>> {
     disable_raw_mode()?;
     execute!(
-        term.backend_mut(),
+        io::stdout(),
         LeaveAlternateScreen,
         DisableMouseCapture
     )?;
-    term.show_cursor()?;
 
     Ok(())
+}
+fn init_panic_hook() {
+    use std::panic::{set_hook, take_hook};
+    let original_hook = take_hook();
+    set_hook(Box::new(move |panic_info| {
+        let _ = teardown_tui();
+        original_hook(panic_info);
+    }));
 }
 
 fn run_app(
@@ -383,6 +419,7 @@ fn run_app(
 
 fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap) {
     use ratatui::widgets::canvas::{Canvas, Rectangle, Map, MapResolution};
+    use NextPreview::*;
 
     let main_layout = Layout::vertical([
         Constraint::Percentage(70),
@@ -392,6 +429,7 @@ fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap
     let [image_frame, color_frame, instruction_line] = main_layout.areas(f.size());
     let colors_layout = Layout::horizontal([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)]);
     let [current_color_box, next_color_box] = colors_layout.areas(color_frame);
+    let tri_box_layout = Layout::vertical([Constraint::Ratio(1, 3), Constraint::Ratio(1, 3), Constraint::Ratio(1, 3)]);
 
     {
         if app.ensure_current_on_screen {
@@ -467,38 +505,50 @@ fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap
         &mut ui_state.vertical_scroll,
     );
 
-    let current_color = app.lines.last().and_then(|r| r.last()).unwrap();
-    let current_canvas = Canvas::default()
-        .block(create_block_owned(format!("Current link: {}", color_map.full_name(*current_color))))
-        .background_color(Color::Rgb(current_color.0[0], current_color.0[1], current_color.0[2]))
-        .x_bounds([
-            0., current_color_box.width as f64
-        ])
-        .y_bounds([
-            0., current_color_box.height as f64
-        ])
-        .paint(|_| { });
-    f.render_widget(current_canvas, current_color_box);
-
-    if let Some(next_color) = app.next_pixel {
-        let nc = next_color.0.clone();
-        let next_canvas = Canvas::default()
-            .block(create_block_owned(format!("Next link: {}", color_map.full_name(next_color))))
-            .background_color(Color::Rgb(nc[0], nc[1], nc[2]))
+    let render_color_box = |f: &mut Frame, color: &Rgb8, bounds: &Rect, color_map: &ColorMap| {
+        let canvas = Canvas::default()
+            .block(create_block_owned(format!("Current link: {}", color_map.full_name(*color))))
+            .background_color(Color::Rgb(color.0[0], color.0[1], color.0[2]))
             .x_bounds([
-            0., next_color_box.width as f64
+                0., bounds.width as f64
             ])
             .y_bounds([
-            0., next_color_box.height as f64
+                0., bounds.height as f64
             ])
-            .paint(move |_| { });
-        f.render_widget(next_canvas, next_color_box);
-    } else {
-        let next_para = Paragraph::new("End of line")
-            .block(create_block("Next link"));
-        f.render_widget(next_para, next_color_box);
-    }
+            .paint(|_| { });
+        f.render_widget(canvas, *bounds);
+    };
 
+    let render_single_pixel_preview = |f: &mut Frame, pixel: Option<Rgb8>, bounds: &Rect, empty_block_name: &'static str| {
+        if let Some(current_color) = pixel {
+            render_color_box(f, &current_color, bounds, color_map);
+        } else {
+            let para = Paragraph::new("End of line")
+                .block(create_block(empty_block_name));
+            f.render_widget(para, *bounds);
+        }
+    };
+    let render_tri_pixel_preview = |f: &mut Frame, pixels: [Option<Rgb8>; 3], base_bounds: &Rect| {
+        let tri_box: [Rect; 3] = tri_box_layout.areas(*base_bounds);
+
+        for (bound, pixel) in tri_box.iter().zip(pixels.iter()) {
+            if let Some(pixel) = pixel {
+                render_color_box(f, pixel, bound, color_map);
+            } else {
+                let para = Paragraph::new("End of line")
+                    .block(create_block("Link"));
+                f.render_widget(para, *bound);
+            }
+        }
+    };
+    match app.current_pixel {
+        Pixel(pixel) => render_single_pixel_preview(f, pixel, &current_color_box, "Current link"),
+        Tri(pixels) => render_tri_pixel_preview(f, pixels, &current_color_box),
+    }
+    match app.next_pixel {
+        Pixel(pixel) => render_single_pixel_preview(f, pixel, &next_color_box, "Next link"),
+        Tri(pixels) => render_tri_pixel_preview(f, pixels, &next_color_box),
+    }
 
     let controls = Line::from(
         "q: Quit | Space: Next link | arrows/h/j/k/l: Scroll left/down/up/right | r: Reset progress",
