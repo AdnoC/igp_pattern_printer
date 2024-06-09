@@ -397,33 +397,23 @@ fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap
         if app.ensure_current_on_screen {
             // vertical
             {
-                let visible_rows = image_frame.height as usize;
-                let total_rows = app.lines.len();
-                let current_scroll = ui_state.vertical_scroll_amount;
-                let top_visible_row = current_scroll;
-                let bottom_visible_row = visible_rows + current_scroll;
-                // If the current row is above the screen
-                if top_visible_row + 2 > total_rows {
-                    ui_state.vertical_scroll_amount = total_rows - 1;
-                // If the current row is below the screen
-                } else if bottom_visible_row < total_rows + 2 {
-                    ui_state.vertical_scroll_amount = total_rows - visible_rows + 2;
-                }
+                // Subtract 2 because we use 2 chars for the border
+                let frame_size = image_frame.height as usize - 2;
+                let content_length = app.lines.len();
+                // Add 1 because we can't see whats behind the top-most border
+                let current_scroll = ui_state.vertical_scroll_amount + 1;
+                // Subtract 1 to account for the 1 we added earlier
+                ui_state.vertical_scroll_amount = ensure_scroll_to_visible(frame_size, content_length, current_scroll) - 1;
             }
             // horizontal
             {
-                let visible_cols = image_frame.width as usize;
-                let total_cols = app.lines.last().map(|l| l.len()).unwrap_or(0) * 2;
-                let current_scroll = ui_state.horizontal_scroll_amount;
-                let right_visible_col = current_scroll;
-                let left_visible_col = visible_cols + current_scroll;
-                // If the current col is right of the screen
-                if right_visible_col > total_cols {
-                    ui_state.horizontal_scroll_amount = total_cols - 1;
-                // If the current col is left of the screen
-                } else if left_visible_col < total_cols {
-                    ui_state.horizontal_scroll_amount = total_cols - visible_cols + 1;
-                }
+                // Subtract 2 because we use 2 chars for the border
+                let frame_size = image_frame.width as usize - 2;
+                let content_length = app.lines.last().map(|l| l.len()).unwrap_or(0) * 2;
+                // Add 1 because we can't see whats behind the left-most border
+                let current_scroll = ui_state.horizontal_scroll_amount + 1;
+                // Subtract 1 to account for the 1 we added earlier
+                ui_state.horizontal_scroll_amount = ensure_scroll_to_visible(frame_size, content_length, current_scroll) - 1;
             }
         }
         app.ensure_current_on_screen = false;
@@ -514,6 +504,23 @@ fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap
         "q: Quit | Space: Next link | arrows/h/j/k/l: Scroll left/down/up/right | r: Reset progress",
     );
     f.render_widget(controls, instruction_line);
+}
+
+
+fn ensure_scroll_to_visible(frame_size: usize, content_length: usize, current_scroll: usize) -> usize {
+    let lowest_visible = current_scroll;
+    let highest_visible = frame_size + current_scroll;
+    let overscroll_padding = 2;
+    // If the current char is below the scroll
+    if lowest_visible > content_length {
+        content_length - 1
+    // If the current char is above the scroll
+    // Add
+    } else if highest_visible < content_length {
+        content_length + 1 + overscroll_padding - frame_size
+    } else {
+        current_scroll
+    }
 }
 
 fn print_grid(rows: Vec<Vec<Rgb8>>, color_map: &mut ColorMap) {
