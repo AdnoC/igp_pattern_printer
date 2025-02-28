@@ -89,10 +89,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let img = ImageReader::open(file)?.decode()?.to_rgb8();
 
     let rows = build_rows(img, &mut config.color_map)?;
-    return Ok(());
     config.save()?;
 
-    //print_grid(rows, &mut config.color_map);
+    //print_grid(rows.clone(), &mut config.color_map);
     let mut term = setup_tui()?;
     init_panic_hook();
     run_app(&mut term, &mut config, rows)?;

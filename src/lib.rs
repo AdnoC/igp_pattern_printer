@@ -56,7 +56,6 @@ impl ColorMap {
     }
 
     pub fn has(&self, color: Rgb8) -> bool {
-        println!("Has {:?} = {}", color, self.full_names.contains_key(&color));
         self.full_names.contains_key(&color)
     }
 
@@ -103,29 +102,6 @@ pub struct ColorEntry {
     pub one_char: String,
 }
 
-
-pub fn build_rows(
-    mut img: RgbImage,
-    color_map: &mut ColorMap,
-) -> Result<Vec<Vec<Rgb8>>, Box<dyn Error>> {
-    let mut rows: Vec<Vec<Rgb8>> = vec![];
-    let mut current_row: Vec<Rgb8> = vec![];
-    for y in 0..(img.height()) {
-        for x in 0..(img.width()) {
-            if img[(x, y)].to_rgb8() == SEPARATOR_COLOR {
-                continue;
-            }
-            current_row.push(img[(x, y)].to_rgb8());
-            color_map.ensure_mapped(img[(x, y)].to_rgb8())?;
-            flood_fill(&mut img, (x, y));
-        }
-        if !current_row.is_empty() {
-            rows.push(current_row);
-            current_row = vec![];
-        }
-    }
-    Ok(rows)
-}
 
 fn flood_fill(img: &mut RgbImage, (x, y): (u32, u32)) {
     if img[(x, y)].to_rgb8() == SEPARATOR_COLOR {

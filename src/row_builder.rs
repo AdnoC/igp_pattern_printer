@@ -34,24 +34,25 @@ impl<'a> RowBuilder<'a> {
 
     pub fn build(&mut self) -> BuildState {
         for y in (self.y)..(self.img.height()) {
-            for x in (self.x)..(self.img.width()) {
+            'row: for x in (self.x)..(self.img.width()) {
                 self.x = x;
                 self.y = y;
                 let pixel = self.img[(x, y)].to_rgb8();
                 if pixel == SEPARATOR_COLOR {
-                    continue;
+                    continue 'row;
                 }
-                 if pixel == Rgb8([0, 0, 0]) { continue;} println!("x, y, p, p2: {:?}", (x, y, self.img[(x, y)], pixel));
                 if !self.color_map.has(pixel) {
                     return BuildState::NewColor(pixel)
                 }
                 self.current_row.push(pixel);
-                //flood_fill(&mut self.img, (x, y));
+                flood_fill(&mut self.img, (x, y));
             }
+
             if !self.current_row.is_empty() {
                 let current = std::mem::replace(&mut self.current_row, vec![]);
                 self.rows.push(current);
             }
+            self.x = 0;
         }
         BuildState::Complete(self.rows.clone())
     }
