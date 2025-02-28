@@ -1,15 +1,16 @@
 use itertools::Itertools;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind
+    },
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use directories::ProjectDirs;
-use image::{io::Reader as ImageReader, Rgb, RgbImage};
-use ratatui::{prelude::*, symbols::scrollbar, widgets::*};
+use image::{io::Reader as ImageReader, RgbImage};
+use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
     error::Error,
     ffi::OsStr,
     fs, io,
@@ -68,6 +69,47 @@ fn build_rows(img: RgbImage, color_map: &mut ColorMap) -> Result<Vec<Vec<Rgb8>>,
                 });
             }
         }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Config {
+    config_path: PathBuf,
+    pub color_map: ColorMap,
+    pub progress: Progress,
+}
+
+impl Config {
+    pub fn load(
+        project_dir: PathBuf,
+        pattern_file: impl AsRef<Path>,
+    ) -> Result<Config, Box<dyn Error>> {
+        let pattern_path = pattern_file.as_ref();
+        let mut config_filename = pattern_path.file_name().unwrap().to_owned();
+        config_filename.push(OsStr::new(".config.ron"));
+        let config_file = pattern_path.with_file_name(config_filename);
+        let config_path = project_dir.join(config_file);
+
+        if !project_dir.exists() {
+            fs::create_dir_all(project_dir)?;
+        }
+
+        let mut config: Config = fs::read_to_string(&config_path)
+            .ok()
+            .and_then(|s| ron::from_str(&s).ok())
+            .unwrap_or(Config {
+                config_path: config_path.clone(),
+                color_map: ColorMap::new(),
+                progress: Progress::new(),
+            });
+        config.config_path = config_path;
+
+        Ok(config)
+    }
+
+    pub fn save(&self) -> Result<(), Box<dyn Error>> {
+        fs::write(&self.config_path, ron::to_string(&self)?)?;
+        Ok(())
     }
 }
 
@@ -184,7 +226,7 @@ fn run_app(
 }
 
 fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap) {
-    use ratatui::widgets::canvas::{Canvas, Rectangle, Map, MapResolution};
+    use ratatui::widgets::canvas::Canvas;
     use NextPreview::*;
 
     let main_layout = Layout::vertical([

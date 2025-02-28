@@ -1,21 +1,6 @@
-use itertools::Itertools;
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use directories::ProjectDirs;
-use image::{io::Reader as ImageReader, Rgb, RgbImage};
-use ratatui::{prelude::*, symbols::scrollbar, widgets::*};
+use image::{Rgb, RgbImage};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    error::Error,
-    ffi::OsStr,
-    fs, io,
-    path::{Path, PathBuf},
-    time::{Duration, Instant},
-};
+use std::collections::HashMap;
 
 pub mod row_builder;
 
@@ -57,30 +42,6 @@ impl ColorMap {
 
     pub fn has(&self, color: Rgb8) -> bool {
         self.full_names.contains_key(&color)
-    }
-
-    pub fn ensure_mapped(&mut self, color: Rgb8) -> Result<(), Box<dyn Error>> {
-        use colored::Colorize;
-        use io::Write;
-
-        if self.full_names.contains_key(&color) {
-            return Ok(());
-        }
-        let colored_rgb = format!("{:?}", color)
-            .color(rgb8_to_true(color))
-            .on_color(rgb8_to_true(SEPARATOR_COLOR));
-        println!("Found new color: {}", colored_rgb);
-        print!("Please give it a name: ");
-        io::stdout().flush()?;
-        let mut name = String::new();
-        io::stdin().read_line(&mut name)?;
-        self.full_names.insert(color, name.trim().to_owned());
-        print!("Please give it a 1 character description: ");
-        io::stdout().flush()?;
-        io::stdin().read_line(&mut name)?;
-        self.short_char
-            .insert(color, name.trim().chars().nth(0).unwrap().to_string());
-        Ok(())
     }
 
     pub fn add_entry(&mut self, color: Rgb8, entry: ColorEntry) {
@@ -129,53 +90,12 @@ pub struct Progress {
     col: usize,
 }
 impl Progress {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Progress { row: 2, col: 1 }
     }
     fn reset(&mut self) {
         self.row = 2;
         self.col = 1;
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Config {
-    config_path: PathBuf,
-    pub color_map: ColorMap,
-    pub progress: Progress,
-}
-
-impl Config {
-    pub fn load(
-        project_dir: PathBuf,
-        pattern_file: impl AsRef<Path>,
-    ) -> Result<Config, Box<dyn Error>> {
-        let pattern_path = pattern_file.as_ref();
-        let mut config_filename = pattern_path.file_name().unwrap().to_owned();
-        config_filename.push(OsStr::new(".config.ron"));
-        let config_file = pattern_path.with_file_name(config_filename);
-        let config_path = project_dir.join(config_file);
-
-        if !project_dir.exists() {
-            fs::create_dir_all(project_dir)?;
-        }
-
-        let mut config: Config = fs::read_to_string(&config_path)
-            .ok()
-            .and_then(|s| ron::from_str(&s).ok())
-            .unwrap_or(Config {
-                config_path: config_path.clone(),
-                color_map: ColorMap::new(),
-                progress: Progress::new(),
-            });
-        config.config_path = config_path;
-
-        Ok(config)
-    }
-
-    pub fn save(&self) -> Result<(), Box<dyn Error>> {
-        fs::write(&self.config_path, ron::to_string(&self)?)?;
-        Ok(())
     }
 }
 
