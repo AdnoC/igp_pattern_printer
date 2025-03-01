@@ -8,7 +8,7 @@ Created to aid in creating pixel-art chainmail.
 
 Run and pass in a filepath to the exported hex image.
 
-```rust
+```sh
 cd tui
 cargo run -- <FILENAME>
 ```
