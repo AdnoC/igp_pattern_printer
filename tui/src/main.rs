@@ -176,8 +176,8 @@ fn run_app(
     term: &mut Terminal<impl Backend>,
     config: &mut Config,
     rows: Vec<Vec<Rgb8>>,
-) -> Result<(), Box<dyn Error>> {
-    let mut app = App::new(rows, &mut config.progress);
+) -> Result<Progress, Box<dyn Error>> {
+    let mut app = App::new(rows, config.progress.clone());
     let mut ui_state = UIState::new(&app);
     let tick_rate = Duration::from_millis(250);
     let mut last_tick = Instant::now();
@@ -192,7 +192,7 @@ fn run_app(
                     continue;
                 }
                 match key.code {
-                    KeyCode::Char('q') => return Ok(()),
+                    KeyCode::Char('q') => return Ok(app.progress),
                     KeyCode::Left | KeyCode::Char('h') => {
                         if ui_state.horizontal_scroll_amount > 0 {
                             ui_state.horizontal_scroll_amount -= 1

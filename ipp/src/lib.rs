@@ -104,15 +104,15 @@ pub enum NextPreview {
     Pixel(Option<Rgb8>),
     Tri([Option<Rgb8>; 3])
 }
-pub struct App<'a> {
+pub struct App {
     pub lines: Vec<Vec<Rgb8>>,
     pub rows: Vec<Vec<Rgb8>>,
     pub current_pixel: NextPreview,
     pub next_pixel: NextPreview,
     pub ensure_current_on_screen: bool,
-    pub progress: &'a mut Progress,
+    pub progress: Progress,
 }
-impl<'a> App<'a> {
+impl App {
     pub fn initialize_lines(rows: &Vec<Vec<Rgb8>>, progress: &Progress) -> Vec<Vec<Rgb8>> {
         if progress.row < 3 {
             vec![
@@ -134,9 +134,9 @@ impl<'a> App<'a> {
         }
     }
 
-    pub fn new(rows: Vec<Vec<Rgb8>>, progress: &'a mut Progress) -> App<'a> {
+    pub fn new(rows: Vec<Vec<Rgb8>>, progress: Progress) -> App {
         use NextPreview::*;
-        let lines = App::initialize_lines(&rows, progress);
+        let lines = App::initialize_lines(&rows, &progress);
         let next_pixel = if progress.row >= 3 {
             Pixel(rows[progress.row].get(progress.col).copied())
         } else {
@@ -168,7 +168,7 @@ impl<'a> App<'a> {
 }
 
 // Lifecycle methods
-impl<'a> App<'a> {
+impl App {
     pub fn tick(&mut self) {
         self.ensure_current_on_screen = true;
         self.progress.col += 1;
