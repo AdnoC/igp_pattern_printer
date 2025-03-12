@@ -1,4 +1,5 @@
-use std::{cell::RefCell, sync::{LazyLock, Mutex}};
+use std::pin::pin;
+use std::{cell::RefCell, rc::Rc, sync::{LazyLock, Mutex}};
 
 use gloo_console::log;
 use image::RgbImage;
@@ -19,8 +20,7 @@ fn app() -> Html {
     let drop_ref = use_node_ref();
     let image = use_state(|| None::<RgbImage>);
 
-    let image_clone = image.clone();
-    let file_callback = async move |files: Option<web_sys::FileList>| {
+    async fn file_callback(files: Option<web_sys::FileList>, image: UseStateHandle<Option<RgbImage>>) {
         let files = gloo::file::FileList::from(files.expect_throw("empty files"));
         for file in files.iter() {
             log!("File:", file.name());
@@ -32,18 +32,22 @@ fn app() -> Html {
                 .expect_throw("Could not load image");
             log!("img: {} x {}", img.width(), img.height());
             let img = img.to_rgb8();
-            image_clone.set(Some(img));
+            image.set(Some(img));
         }
-    };
+    }
 
     use_event_with_window("keypress", move |e: KeyboardEvent| {
         log!("{} is pressed!", e.key());
     });
     let ondrop = {
+        // let image = Rc::new(image.clone());
+        let image = image.clone();
         move |e: DragEvent| {
+            let image = image.clone();
             e.prevent_default();
             log!("D2");
-            spawn_local(file_callback(e.data_transfer().expect_throw("no file").files()));
+            let load_future = Box::pin(file_callback(e.data_transfer().expect_throw("no file").files(), image));
+            spawn_local(load_future);
         }
     };
     let ondragover = move |e: DragEvent| e.prevent_default();
@@ -51,7 +55,7 @@ fn app() -> Html {
     html! {
         <div style="background-color: red;" ref={drop_ref} ondrop={ondrop} ondragover={ondragover}>
             if let Some(img) = &*image {
-                <h1>{"HAVE IME"}</h1>
+                <h2>{"HAVE IME"}</h2>
             }
             else {
                 <Landing />
