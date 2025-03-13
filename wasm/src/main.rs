@@ -1,5 +1,6 @@
 use std::pin::pin;
 use std::{cell::RefCell, rc::Rc, sync::{LazyLock, Mutex}};
+use yew_autoprops::autoprops;
 
 use gloo_console::log;
 use image::RgbImage;
@@ -15,12 +16,27 @@ thread_local! {
     static APP: Mutex<Option<App>> = Mutex::new(None);
 }
 
-#[function_component(Main)]
-fn app() -> Html {
-    let drop_ref = use_node_ref();
-    let image = use_state(|| None::<RgbImage>);
+struct Config {
+    name: String,
+    pub color_map: ipp::ColorMap,
+    pub progress: ipp::Progress,
+}
+impl Config {
+    pub fn load(file: Sting) -> Config {
+        unimplemented!()
+    }
+}
+struct InitializationState {
+    pub image: RgbImage,
+    pub config: Config,
+}
 
-    async fn file_callback(files: Option<web_sys::FileList>, image: UseStateHandle<Option<RgbImage>>) {
+#[function_component]
+fn Main() -> Html {
+    async fn file_callback(
+        files: Option<web_sys::FileList>,
+        image: UseStateHandle<Option<Rc<InitializationState>>>,
+        reset_app: impl Fn()) {
         let files = gloo::file::FileList::from(files.expect_throw("empty files"));
         for file in files.iter() {
             log!("File:", file.name());
@@ -32,9 +48,17 @@ fn app() -> Html {
                 .expect_throw("Could not load image");
             log!("img: {} x {}", img.width(), img.height());
             let img = img.to_rgb8();
-            image.set(Some(img));
+            image.set(Some(Rc::new(InitializationState {
+                    image: img,
+                    config: Config::load(file.name()),
+            })));
+            reset_app();
         }
     }
+    let drop_ref = use_node_ref();
+    let image = use_state(|| None::<Rc<InitializationState>>);
+    let ipp_app = use_state(|| None::<Rc<ipp::App>>);
+
 
     use_event_with_window("keypress", move |e: KeyboardEvent| {
         log!("{} is pressed!", e.key());
@@ -54,8 +78,8 @@ fn app() -> Html {
 
     html! {
         <div style="background-color: red;" ref={drop_ref} ondrop={ondrop} ondragover={ondragover}>
-            if let Some(img) = &*image {
-                <h2>{"HAVE IME"}</h2>
+            if let Some(ref img) = &*image {
+                <Ipp_App image={img} />
             }
             else {
                 <Landing />
@@ -64,11 +88,19 @@ fn app() -> Html {
     }
 }
 
-#[function_component(Landing)]
-fn landing() -> Html {
+
+#[function_component]
+fn Landing() -> Html {
     html! {
         <h1>{ "DROP IMAGE HERE" }</h1>
     }
+}
+
+#[autoprops]
+#[function_component]
+fn Ipp_App(image: Rc<RgbImage>) -> Html {
+    
+    unimplemented!()
 }
 
 

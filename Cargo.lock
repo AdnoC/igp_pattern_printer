@@ -2300,6 +2300,7 @@ dependencies = [
  "wasm-logger",
  "web-sys",
  "yew",
+ "yew-autoprops",
  "yew-hooks",
 ]
 
@@ -2595,6 +2596,17 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "yew-macro",
+]
+
+[[package]]
+name = "yew-autoprops"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58865a8f2470a6ad839274e05c9627170d32930f39a2348f8c425880a6131792"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
 ]
 
 [[package]]
