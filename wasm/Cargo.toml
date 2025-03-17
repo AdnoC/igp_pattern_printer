@@ -10,7 +10,9 @@ gloo-events = "0.2.0"
 gloo-file = { version = "0.3.0", features = ["futures"] }
 image = "0.25.5"
 ipp = { path = "../ipp" }
+ron = "0.8.1"
 send_wrapper = "0.6.0"
+serde = { version = "1.0.219", features = ["derive"] }
 wasm-bindgen-futures = { version = "0.4.50", features = ["futures-core"] }
 wasm-logger = "0.2.0"
 web-sys = "0.3.77"

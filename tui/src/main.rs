@@ -43,8 +43,8 @@ fn build_rows(img: RgbImage, color_map: &mut ColorMap) -> Result<Vec<Vec<Rgb8>>,
     use io::Write;
     use ipp::row_builder::{ RowBuilder, BuildState };
 
-    let mut builder = RowBuilder::new(img, color_map);
-    let mut state = builder.build();
+    let mut builder = RowBuilder::new(img);
+    let mut state = builder.build(color_map);
     loop {
         match state {
             BuildState::Complete(rows) => return Ok(rows),
@@ -66,7 +66,7 @@ fn build_rows(img: RgbImage, color_map: &mut ColorMap) -> Result<Vec<Vec<Rgb8>>,
                 state = builder.continue_build(ColorEntry {
                     full_name: full_name.trim().to_owned(),
                     one_char: one_char.trim().chars().nth(0).unwrap().to_string()
-                });
+                }, color_map);
             }
         }
     }

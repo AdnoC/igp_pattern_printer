@@ -8,23 +8,20 @@ use crate::{
     SEPARATOR_COLOR,
 };
 
-pub struct RowBuilder<'a> {
+pub struct RowBuilder {
     img: RgbImage,
-    color_map: &'a mut ColorMap,
     rows: Vec<Vec<Rgb8>>,
     current_row: Vec<Rgb8>,
     x: u32,
     y: u32,
 }
 
-impl<'a> RowBuilder<'a> {
+impl RowBuilder {
     pub fn new(
         img: RgbImage,
-        color_map: &mut ColorMap,
     ) -> RowBuilder {
         RowBuilder {
             img,
-            color_map,
             rows: vec![],
             current_row: vec![],
             x: 0,
@@ -32,7 +29,7 @@ impl<'a> RowBuilder<'a> {
         }
     }
 
-    pub fn build(&mut self) -> BuildState {
+    pub fn build(&mut self, color_map: &mut ColorMap) -> BuildState {
         for y in (self.y)..(self.img.height()) {
             'row: for x in (self.x)..(self.img.width()) {
                 self.x = x;
@@ -41,7 +38,7 @@ impl<'a> RowBuilder<'a> {
                 if pixel == SEPARATOR_COLOR {
                     continue 'row;
                 }
-                if !self.color_map.has(pixel) {
+                if !color_map.has(pixel) {
                     return BuildState::NewColor(pixel)
                 }
                 self.current_row.push(pixel);
@@ -57,10 +54,10 @@ impl<'a> RowBuilder<'a> {
         BuildState::Complete(self.rows.clone())
     }
 
-    pub fn continue_build(&mut self, entry: ColorEntry) -> BuildState {
+    pub fn continue_build(&mut self, entry: ColorEntry, color_map: &mut ColorMap) -> BuildState {
         let initial_pixel = self.img[(self.x, self.y)].to_rgb8();
-        self.color_map.add_entry(initial_pixel, entry);
-        self.build()
+        color_map.add_entry(initial_pixel, entry);
+        self.build(color_map)
     }
 
 }
