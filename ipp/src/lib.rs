@@ -25,6 +25,24 @@ impl ToRgb8 for Rgb<u8> {
         Rgb8(self.0)
     }
 }
+impl Rgb8 {
+    pub fn to_hex(&self) -> String {
+        fn num_to_hex(num: u8) -> char {
+            if num < 10 {
+                return ('0' as u8 + num) as char;
+            }
+            let num = num - 10;
+            return ('A' as u8 + num) as char;
+        }
+        let r1 = num_to_hex(self.0[0] / 16);
+        let r2 = num_to_hex(self.0[0] % 16);
+        let g1 = num_to_hex(self.0[1] / 16);
+        let g2 = num_to_hex(self.0[1] % 16);
+        let b1 = num_to_hex(self.0[2] / 16);
+        let b2 = num_to_hex(self.0[2] % 16);
+        format!("#{}{}{}{}{}{}", r1, r2, g1, g2, b1, b2)
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ColorMap {

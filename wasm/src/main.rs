@@ -88,6 +88,7 @@ impl Config {
 struct InitializationState {
     pub image: RgbImage,
     pub config: Config,
+    pub color: Rgb8,
 }
 
 #[autoprops]
@@ -100,7 +101,7 @@ fn Initializer() -> Html {
 fn Main() -> Html {
     async fn file_callback(
         files: Option<web_sys::FileList>,
-        state: UseStateHandle<Rc<RefCell<AppState>>>) {
+        state: UseStateHandle<AppView>) {
         let files = gloo::file::FileList::from(files.expect_throw("empty files"));
         for file in files.iter() {
             log!("File:", file.name());
@@ -117,6 +118,14 @@ fn Main() -> Html {
                     config: Config::load(file.name()),
             });
             APP.with_borrow_mut(|state| *state = new_state);
+            
+            fn try_init_app(state: UseStateHandle<AppView>) {
+                APP.with_borrow(|state| match state {
+                    AppState::Initializing(_) {
+
+                    }
+                });
+            }
         }
     }
     let drop_ref = use_node_ref();
@@ -142,21 +151,50 @@ fn Main() -> Html {
     html! {
         <div style="background-color: red;" ref={drop_ref} ondrop={ondrop} ondragover={ondragover}>
         {
-            match &**state {
-                AppState::Uninitialized => html! { <Landing /> },
-                AppState::Initializing(_init_state) => unimplemented!(),
-                AppState::Running(_app) => unimplemented!(),
+            match &*state {
+                AppView::Uninitialized => html! { <Landing /> },
+                AppView::Initializing{ new_color } => unimplemented!(),
+                AppView::Running(_app) => unimplemented!(),
             }
         }
         </div>
     }
 }
 
+#[autoprops]
+#[function_component]
+fn Hexagon(color: &Rgb8) -> Html {
+    let size = 50;
+    let style = vec![
+        format!("background-color: {};", color.to_hex()),
+        "clip-path: polygon(75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%, 25% 0);".to_string(),
+        format!("height: {}px;", size * 9 / 10),
+        format!("width: {}px;", size),
+    ].join(" ");
+    html! {
+        <div style={style} />
+    }
+}
 
 #[function_component]
 fn Landing() -> Html {
     html! {
-        <h1>{ "DROP IMAGE HERE" }</h1>
+        <div>
+            <h1>{ "DROP IMAGE HERE" }</h1>
+            <Hexagon color={Rgb8([0, 0, 255])} />
+        </div>
+    }
+}
+
+#[autoprops]
+#[function_component]
+fn ColorPrompt(color: &Rgb8) -> Html {
+    html! {
+        <div>
+            <p>{"An unknown color was detected. Please give it a name"}</p>
+            <p>{format!("Hex code: {}", color.to_hex())}</p>
+            <Hexagon color={*color} />
+        </div>
     }
 }
 
