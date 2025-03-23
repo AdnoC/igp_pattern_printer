@@ -1,7 +1,11 @@
-use std::pin::pin;
-use std::{cell::RefCell, rc::Rc, sync::{LazyLock, Mutex}};
 use implicit_clone::unsync::IArray;
 use implicit_clone::ImplicitClone;
+use std::pin::pin;
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{LazyLock, Mutex},
+};
 use web_sys::HtmlInputElement;
 use yew::functional;
 use yew_autoprops::autoprops;
@@ -30,7 +34,7 @@ enum AppState {
 #[derive(Debug)]
 enum AppView {
     Uninitialized,
-    Initializing{ new_color: Rgb8 },
+    Initializing { new_color: Rgb8 },
     Running(AppSnapshot),
 }
 #[derive(Debug, PartialEq, Clone, ImplicitClone)]
@@ -45,9 +49,9 @@ fn get_view() -> AppView {
         AppState::Uninitialized => AppView::Uninitialized,
         AppState::Initializing(init_state) => {
             unimplemented!()
-        },
+        }
         AppState::Running(app) => AppView::Running(AppSnapshot {
-            rows: rows_to_iarray(&app.rows),
+            rows: rows_to_iarray(&app.lines),
             current_pixel: app.current_pixel,
             next_pixel: app.next_pixel,
             ensure_current_on_screen: app.ensure_current_on_screen,
@@ -56,10 +60,11 @@ fn get_view() -> AppView {
 }
 
 fn rows_to_iarray(rows: &Vec<Vec<Rgb8>>) -> IArray<IArray<Rgb8>> {
-    IArray::from(rows
-                 .iter()
-                 .map(|row| IArray::from(row.clone()))
-                 .collect::<Vec<IArray<Rgb8>>>())
+    IArray::from(
+        rows.iter()
+            .map(|row| IArray::from(row.clone()))
+            .collect::<Vec<IArray<Rgb8>>>(),
+    )
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -71,11 +76,15 @@ struct Config {
 impl Config {
     fn get_storage() -> Option<web_sys::Storage> {
         let window = web_sys::window()?;
-        window.local_storage().expect_throw("Could not access local storage")
+        window
+            .local_storage()
+            .expect_throw("Could not access local storage")
     }
     fn try_load(file: &str) -> Option<Config> {
         let storage = Config::get_storage()?;
-        let config_str = storage.get_item(file).expect_throw("Could not retrieve value")?;
+        let config_str = storage
+            .get_item(file)
+            .expect_throw("Could not retrieve value")?;
         ron::from_str(&config_str).ok()
     }
     pub fn load(file: String) -> Config {
@@ -107,9 +116,7 @@ struct InitializationState {
 
 #[function_component]
 fn Main() -> Html {
-    async fn file_callback(
-        files: Option<web_sys::FileList>,
-        state: UseStateHandle<AppView>) {
+    async fn file_callback(files: Option<web_sys::FileList>, state: UseStateHandle<AppView>) {
         use ipp::row_builder::BuildState;
 
         let files = gloo::file::FileList::from(files.expect_throw("empty files"));
@@ -119,8 +126,7 @@ fn Main() -> Html {
                 .await
                 .expect_throw("read file");
             log!("Got data, {:?}", data.len());
-            let img = image::load_from_memory(&data[..])
-                .expect_throw("Could not load image");
+            let img = image::load_from_memory(&data[..]).expect_throw("Could not load image");
             log!("img: {} x {}", img.width(), img.height());
             let img = img.to_rgb8();
             let mut row_builder = ipp::row_builder::RowBuilder::new(img);
@@ -130,23 +136,20 @@ fn Main() -> Html {
                     config.save();
                     let app = ipp::App::new(rows, config.progress);
                     let snapshot = AppSnapshot {
-                            rows: rows_to_iarray(&app.rows),
-                            current_pixel: app.current_pixel,
-                            next_pixel: app.next_pixel,
-                            ensure_current_on_screen: app.ensure_current_on_screen,
-                        };
-                    (
-                        AppState::Running(app),
-                        AppView::Running(snapshot)
-                    )
-            },
+                        rows: rows_to_iarray(&app.lines),
+                        current_pixel: app.current_pixel,
+                        next_pixel: app.next_pixel,
+                        ensure_current_on_screen: app.ensure_current_on_screen,
+                    };
+                    (AppState::Running(app), AppView::Running(snapshot))
+                }
                 BuildState::NewColor(color) => (
                     AppState::Initializing(InitializationState {
-                            row_builder,
-                            config,
+                        row_builder,
+                        config,
                     }),
-                    AppView::Initializing { new_color: color }
-                    ),
+                    AppView::Initializing { new_color: color },
+                ),
             };
             APP.with_borrow_mut(|state| *state = app_state);
             state.set(app_view);
@@ -154,7 +157,6 @@ fn Main() -> Html {
     }
     let drop_ref = use_node_ref();
     let state = use_state(|| get_view());
-
 
     use_event_with_window("keypress", move |e: KeyboardEvent| {
         log!("{} is pressed!", e.key());
@@ -166,7 +168,10 @@ fn Main() -> Html {
             let state = state.clone();
             e.prevent_default();
             log!("D2");
-            let load_future = Box::pin(file_callback(e.data_transfer().expect_throw("no file").files(), state));
+            let load_future = Box::pin(file_callback(
+                e.data_transfer().expect_throw("no file").files(),
+                state,
+            ));
             spawn_local(load_future);
         }
     };
@@ -182,23 +187,28 @@ fn Main() -> Html {
 
                 match app_state {
                     AppState::Initializing(init_state) => {
-                        let app_view = match init_state.row_builder.continue_build(entry, &mut init_state.config.color_map) {
+                        let app_view = match init_state
+                            .row_builder
+                            .continue_build(entry, &mut init_state.config.color_map)
+                        {
                             BuildState::Complete(rows) => {
                                 init_state.config.save();
                                 let app = ipp::App::new(rows, init_state.config.progress.clone());
                                 let snapshot = AppSnapshot {
-                                    rows: rows_to_iarray(&app.rows),
+                                    rows: rows_to_iarray(&app.lines),
                                     current_pixel: app.current_pixel,
                                     next_pixel: app.next_pixel,
                                     ensure_current_on_screen: app.ensure_current_on_screen,
                                 };
                                 *app_state = AppState::Running(app);
                                 AppView::Running(snapshot)
-                            },
-                            BuildState::NewColor(color) => AppView::Initializing { new_color: color },
+                            }
+                            BuildState::NewColor(color) => {
+                                AppView::Initializing { new_color: color }
+                            }
                         };
                         state.set(app_view);
-                    },
+                    }
                     _ => return,
                 }
             });
@@ -224,13 +234,15 @@ fn Main() -> Html {
 fn Hexagon(color: &Rgb8) -> Html {
     let size = 50;
     let style = vec![
+        "display: inline-block;".to_string(),
         format!("background-color: {};", color.to_hex()),
         "clip-path: polygon(75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%, 25% 0);".to_string(),
         format!("height: {}px;", size * 9 / 10),
         format!("width: {}px;", size),
-    ].join(" ");
+    ]
+    .join(" ");
     html! {
-        <div style={style} />
+        <div style={style} class="hexagon" />
     }
 }
 
@@ -255,10 +267,7 @@ fn ColorPrompt(color: &Rgb8, set_color: &Callback<ColorEntry>) -> Html {
             if ev.key() == "Enter" {
                 let input: HtmlInputElement = ev.target_unchecked_into();
                 if let Some(full_name) = &*fullname {
-                    let one_char = input
-                        .value()
-                        .chars()
-                        .nth(0);
+                    let one_char = input.value().chars().nth(0);
                     let one_char = if let Some(ch) = one_char {
                         ch.to_string()
                     } else {
@@ -271,7 +280,11 @@ fn ColorPrompt(color: &Rgb8, set_color: &Callback<ColorEntry>) -> Html {
                         one_char,
                     };
                     fullname.set(None);
-                    log!("Setting new color: {}, {}", &entry.full_name, &entry.one_char);
+                    log!(
+                        "Setting new color: {}, {}",
+                        &entry.full_name,
+                        &entry.one_char
+                    );
                     set_color.emit(entry);
                 } else {
                     fullname.set(Some(input.value()));
@@ -297,10 +310,32 @@ fn ColorPrompt(color: &Rgb8, set_color: &Callback<ColorEntry>) -> Html {
 #[function_component]
 fn Ipp_App(app: &AppSnapshot) -> Html {
     html! {
-        <p>{"This is where we'd render the app"}</p>
+        <div>
+            <ImageDisplay rows={app.rows.clone()} />
+        </div>
     }
 }
 
+#[autoprops]
+#[function_component]
+fn ImageDisplay(rows: IArray<IArray<Rgb8>>) -> Html {
+    let hex_rows = rows
+        .iter()
+        .map(|row| row.iter().map(|pixel| html! { <Hexagon color={pixel} /> }));
+
+    let hex_rows = hex_rows.map(|row| {
+        html! {
+            <div>
+                {row.collect::<Html>()}
+            </div>
+        }
+    });
+    html! {
+        <div>
+            {hex_rows.collect::<Html>()}
+        </div>
+    }
+}
 
 fn main() {
     wasm_logger::init(wasm_logger::Config::default());
