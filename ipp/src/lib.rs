@@ -1,6 +1,7 @@
 use image::{Rgb, RgbImage};
 use implicit_clone::ImplicitClone;
 use serde::{Deserialize, Serialize};
+use std::rc::Rc;
 use std::collections::HashMap;
 
 pub mod row_builder;
@@ -45,10 +46,10 @@ impl Rgb8 {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ColorMap {
-    full_names: HashMap<Rgb8, String>,
-    short_char: HashMap<Rgb8, String>,
+    full_names: HashMap<Rgb8, Rc<str>>,
+    short_char: HashMap<Rgb8, Rc<str>>,
 }
 
 impl ColorMap {
@@ -64,16 +65,16 @@ impl ColorMap {
     }
 
     pub fn add_entry(&mut self, color: Rgb8, entry: ColorEntry) {
-        self.full_names.insert(color, entry.full_name);
-        self.short_char.insert(color, entry.one_char);
+        self.full_names.insert(color, Rc::from(entry.full_name));
+        self.short_char.insert(color, Rc::from(entry.one_char));
     }
 
-    pub fn full_name(&self, color: Rgb8) -> &str {
-        &self.full_names[&color]
+    pub fn full_name(&self, color: Rgb8) -> Rc<str> {
+        self.full_names[&color].clone()
     }
 
-    pub fn one_char(&self, color: Rgb8) -> &str {
-        &self.short_char[&color]
+    pub fn one_char(&self, color: Rgb8) -> Rc<str> {
+        self.short_char[&color].clone()
     }
 }
 

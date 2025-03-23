@@ -13,4 +13,4 @@ image = "0.25.1"
 implicit-clone = "0.4.9"
 itertools = "0.13.0"
 ron = "0.8.1"
-serde = { version = "1.0.202", features = ["derive"] }
+serde = { version = "1.0.202", features = ["derive", "rc"] }

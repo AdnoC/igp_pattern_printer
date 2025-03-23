@@ -28,7 +28,7 @@ thread_local! {
 enum AppState {
     Uninitialized,
     Initializing(InitializationState),
-    Running(ipp::App),
+    Running(ipp::App, Config),
 }
 
 #[derive(Debug)]
@@ -39,37 +39,53 @@ enum AppView {
 }
 #[derive(Debug, PartialEq, Clone, ImplicitClone)]
 struct AppSnapshot {
-    pub rows: IArray<IArray<Rgb8>>,
+    pub rows: IArray<IArray<Pixel>>,
     pub current_pixel: ipp::NextPreview,
     pub next_pixel: ipp::NextPreview,
     pub ensure_current_on_screen: bool,
+    pub hex_size: u32,
 }
-fn get_view() -> AppView {
-    APP.with_borrow(|app| match app {
+#[derive(Debug, PartialEq, Clone, ImplicitClone)]
+struct Pixel {
+    color: Rgb8,
+    descriptor: Rc<str>,
+}
+fn get_view(app: &AppState) -> AppView {
+    match app {
         AppState::Uninitialized => AppView::Uninitialized,
         AppState::Initializing(init_state) => {
             unimplemented!()
         }
-        AppState::Running(app) => AppView::Running(AppSnapshot {
-            rows: rows_to_iarray(&app.lines),
+        AppState::Running(app, config) => AppView::Running(AppSnapshot {
+            rows: rows_to_iarray(&app.lines, &config.color_map),
             current_pixel: app.current_pixel,
             next_pixel: app.next_pixel,
             ensure_current_on_screen: app.ensure_current_on_screen,
+            hex_size: config.hex_size,
         }),
-    })
+    }
 }
 
-fn rows_to_iarray(rows: &Vec<Vec<Rgb8>>) -> IArray<IArray<Rgb8>> {
+fn rows_to_iarray(rows: &Vec<Vec<Rgb8>>, color_map: &ipp::ColorMap) -> IArray<IArray<Pixel>> {
     IArray::from(
         rows.iter()
-            .map(|row| IArray::from(row.clone()))
-            .collect::<Vec<IArray<Rgb8>>>(),
+            .map(|row| IArray::from(row
+                                    .iter()
+                                    .map(|c| Pixel {
+                                        color: *c,
+                                        descriptor: color_map.one_char(*c) 
+                                    })
+                                    .collect::<Vec<Pixel>>()
+                                    )
+                 )
+            .collect::<Vec<IArray<Pixel>>>()
     )
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 struct Config {
     name: String,
+    hex_size: u32,
     pub color_map: ipp::ColorMap,
     pub progress: ipp::Progress,
 }
@@ -93,6 +109,7 @@ impl Config {
         } else {
             Config {
                 name: file,
+                hex_size: 50,
                 color_map: ipp::ColorMap::new(),
                 progress: ipp::Progress::new(),
             }
@@ -134,14 +151,15 @@ fn Main() -> Html {
             let (app_state, app_view) = match row_builder.build(&mut config.color_map) {
                 BuildState::Complete(rows) => {
                     config.save();
-                    let app = ipp::App::new(rows, config.progress);
+                    let app = ipp::App::new(rows, config.progress.clone());
                     let snapshot = AppSnapshot {
-                        rows: rows_to_iarray(&app.lines),
+                        rows: rows_to_iarray(&app.lines, &config.color_map),
                         current_pixel: app.current_pixel,
                         next_pixel: app.next_pixel,
                         ensure_current_on_screen: app.ensure_current_on_screen,
+                        hex_size: config.hex_size,
                     };
-                    (AppState::Running(app), AppView::Running(snapshot))
+                    (AppState::Running(app, config), AppView::Running(snapshot))
                 }
                 BuildState::NewColor(color) => (
                     AppState::Initializing(InitializationState {
@@ -156,11 +174,8 @@ fn Main() -> Html {
         }
     }
     let drop_ref = use_node_ref();
-    let state = use_state(|| get_view());
+    let state = use_state(|| APP.with_borrow(|app| get_view(app)));
 
-    use_event_with_window("keypress", move |e: KeyboardEvent| {
-        log!("{} is pressed!", e.key());
-    });
     let ondrop = {
         // let image = Rc::new(image.clone());
         let state = state.clone();
@@ -195,12 +210,13 @@ fn Main() -> Html {
                                 init_state.config.save();
                                 let app = ipp::App::new(rows, init_state.config.progress.clone());
                                 let snapshot = AppSnapshot {
-                                    rows: rows_to_iarray(&app.lines),
+                                    rows: rows_to_iarray(&app.lines, &init_state.config.color_map),
                                     current_pixel: app.current_pixel,
                                     next_pixel: app.next_pixel,
                                     ensure_current_on_screen: app.ensure_current_on_screen,
+                                    hex_size: init_state.config.hex_size,
                                 };
-                                *app_state = AppState::Running(app);
+                                *app_state = AppState::Running(app, init_state.config.clone());
                                 AppView::Running(snapshot)
                             }
                             BuildState::NewColor(color) => {
@@ -216,13 +232,32 @@ fn Main() -> Html {
         Callback::from(initialize_color)
     };
 
+    let step_app = {
+        let state = state.clone();
+        let step_app = move |_| {
+            APP.with_borrow_mut(|app_state| {
+                match app_state {
+                    AppState::Running(app, config) => {
+                        app.tick();
+                        config.progress = app.progress.clone();
+                        config.save();
+                        state.set(get_view(app_state));
+                    },
+                    _ => return,
+                }
+            });
+
+        };
+        Callback::from(step_app)
+    };
+
     html! {
         <div style="width: 100vw; height: 100vh;" ref={drop_ref} ondrop={ondrop} ondragover={ondragover}>
         {
             match &*state {
                 AppView::Uninitialized => html! { <Landing /> },
                 AppView::Initializing{ new_color } => html! { <ColorPrompt color={*new_color} set_color={initialize_color} /> },
-                AppView::Running(app) => html! { <Ipp_App app={app} /> },
+                AppView::Running(app) => html! { <Ipp_App app={app} step={step_app} /> },
             }
         }
         </div>
@@ -231,8 +266,7 @@ fn Main() -> Html {
 
 #[autoprops]
 #[function_component]
-fn Hexagon(color: &Rgb8) -> Html {
-    let size = 50;
+fn Hexagon(color: &Rgb8, size: u32, name: Option<Rc<str>>) -> Html {
     let style = vec![
         "display: inline-block;".to_string(),
         format!("background-color: {};", color.to_hex()),
@@ -242,7 +276,9 @@ fn Hexagon(color: &Rgb8) -> Html {
     ]
     .join(" ");
     html! {
-        <div style={style} class="hexagon" />
+        <div style={style} class="hexagon">
+        {name.as_ref().map(|s| &**s).unwrap_or("")}
+        </div>
     }
 }
 
@@ -251,7 +287,7 @@ fn Landing() -> Html {
     html! {
         <div>
             <h1>{ "DROP IMAGE HERE" }</h1>
-            <Hexagon color={Rgb8([0, 0, 255])} />
+            <Hexagon size={50} color={Rgb8([0, 0, 255])} name={None::<Rc<str>>} />
         </div>
     }
 }
@@ -267,13 +303,11 @@ fn ColorPrompt(color: &Rgb8, set_color: &Callback<ColorEntry>) -> Html {
             if ev.key() == "Enter" {
                 let input: HtmlInputElement = ev.target_unchecked_into();
                 if let Some(full_name) = &*fullname {
-                    let one_char = input.value().chars().nth(0);
-                    let one_char = if let Some(ch) = one_char {
-                        ch.to_string()
-                    } else {
+                    let one_char = input.value();
+                    if one_char.is_empty() {
                         log!("One-char descriptor empty");
                         return;
-                    };
+                    }
 
                     let entry = ColorEntry {
                         full_name: full_name.to_string(),
@@ -296,7 +330,7 @@ fn ColorPrompt(color: &Rgb8, set_color: &Callback<ColorEntry>) -> Html {
         <div>
             <p>{"An unknown color was detected. Please give it a name"}</p>
             <p>{format!("Hex code: {}", color.to_hex())}</p>
-            <Hexagon color={*color} />
+            <Hexagon size={50} color={*color} name={None::<Rc<str>>} />
             <input type="text" placeholder="Orange, Blue, etc..." onkeydown={onkeydown.clone()} />
             if fullname.is_some() {
                 <p>{"Please give a one-letter descriptor for your color"}</p>
@@ -308,20 +342,31 @@ fn ColorPrompt(color: &Rgb8, set_color: &Callback<ColorEntry>) -> Html {
 
 #[autoprops]
 #[function_component]
-fn Ipp_App(app: &AppSnapshot) -> Html {
+fn Ipp_App(app: &AppSnapshot, step: &Callback<()>) -> Html {
+    let step = step.clone();
+    use_event_with_window("keypress", move |e: KeyboardEvent| {
+        log!("Key pressed: ", e.code());
+        match e.code().as_str() {
+            "Space" => {
+                e.prevent_default();
+                step.emit(());
+            },
+            _ => (),
+        }
+    });
     html! {
         <div>
-            <ImageDisplay rows={app.rows.clone()} />
+            <ImageDisplay hex_size={app.hex_size} rows={app.rows.clone()} />
         </div>
     }
 }
 
 #[autoprops]
 #[function_component]
-fn ImageDisplay(rows: IArray<IArray<Rgb8>>) -> Html {
+fn ImageDisplay(rows: IArray<IArray<Pixel>>, hex_size: u32) -> Html {
     let hex_rows = rows
         .iter()
-        .map(|row| row.iter().map(|pixel| html! { <Hexagon color={pixel} /> }));
+        .map(|row| row.iter().map(|pixel| html! { <Hexagon size={hex_size} color={pixel.color} name={Some(pixel.descriptor)} /> }));
 
     let hex_rows = hex_rows.map(|row| {
         html! {
