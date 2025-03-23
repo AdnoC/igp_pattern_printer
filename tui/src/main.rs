@@ -179,6 +179,7 @@ fn run_app(
     rows: Vec<Vec<Rgb8>>,
 ) -> Result<Progress, Box<dyn Error>> {
     let mut app = App::new(rows, config.progress.clone());
+
     let mut ui_state = UIState::new(&app);
     let tick_rate = Duration::from_millis(250);
     let mut last_tick = Instant::now();

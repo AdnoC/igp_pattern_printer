@@ -298,11 +298,16 @@ fn Hexagon(color: &Rgb8, size: u32, name: Option<Rc<str>>) -> Html {
     } else {
         "black"
     };
+    let font_size = name
+        .as_ref()
+        .map(|n| n.len() + 1)
+        .map(|mult| size / mult as u32)
+        .unwrap_or(0);
     let style = vec![
         "display: inline-flex;".to_string(),
         "justify-content: center;".to_string(),
         "align-items: center;".to_string(),
-        format!("font-size: {}pt;", size / 2),
+        format!("font-size: {}pt;", font_size),
         format!("background-color: {};", color.to_hex()),
         format!("color: {};", font_color),
         "clip-path: polygon(0 75%, 50% 100%, 100% 75%, 100% 25%, 50% 0, 0 25%);".to_string(),

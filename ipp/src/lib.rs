@@ -154,7 +154,7 @@ impl App {
         } else {
             let mut lines: Vec<Vec<Rgb8>> = rows.iter().take(progress.row).cloned().collect();
             lines.push(
-                rows[progress.row - 1]
+                rows[progress.row]
                     .iter()
                     .take(progress.col + 1)
                     .cloned()
