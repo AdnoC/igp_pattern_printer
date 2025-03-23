@@ -136,7 +136,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     //print_grid(rows.clone(), &mut config.color_map);
     let mut term = setup_tui()?;
     init_panic_hook();
-    run_app(&mut term, &mut config, rows)?;
+    let progress = run_app(&mut term, &mut config, rows)?;
+    config.progress = progress;
     config.save()?;
     term.show_cursor()?;
     teardown_tui()?;
@@ -275,7 +276,7 @@ fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap
         .map(|(row_idx, row)| {
             let mut line = row.iter()
                 .map(|c| {
-                    Span::styled(color_map.one_char(*c), Color::Rgb(c.0[0], c.0[1], c.0[2]))
+                    Span::styled(color_map.one_char(*c).as_ref().to_owned(), Color::Rgb(c.0[0], c.0[1], c.0[2]))
                 })
                 .intersperse(Span::raw(" "))
                 .collect::<Vec<_>>();
