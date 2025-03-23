@@ -87,20 +87,28 @@ fn flood_fill(img: &mut RgbImage, (x, y): (u32, u32)) {
     if img[(x, y)].to_rgb8() == SEPARATOR_COLOR {
         return;
     }
-    img[(x, y)] = Rgb(SEPARATOR_COLOR.0);
+    let mut points = vec![(x, y)];
+    while let Some((x, y)) = points.pop() {
+        if img[(x, y)].to_rgb8() == SEPARATOR_COLOR {
+            continue;
+        }
 
-    if x > 0 {
-        flood_fill(img, (x - 1, y));
+        img[(x, y)] = Rgb(SEPARATOR_COLOR.0);
+
+        if x > 0 {
+            points.push((x - 1, y));
+        }
+        if y > 0 {
+            points.push((x, y - 1));
+        }
+        if x + 1 < img.width() {
+            points.push((x + 1, y));
+        }
+        if y + 1 < img.height() {
+            points.push((x, y + 1));
+        }
     }
-    if y > 0 {
-        flood_fill(img, (x, y - 1));
-    }
-    if x + 1 < img.width() {
-        flood_fill(img, (x + 1, y));
-    }
-    if y + 1 < img.height() {
-        flood_fill(img, (x, y + 1));
-    }
+
 }
 
 #[derive(Serialize, Deserialize, Hash, Eq, PartialEq, PartialOrd, Clone, Debug)]
