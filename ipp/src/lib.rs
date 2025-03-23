@@ -76,6 +76,7 @@ impl ColorMap {
     }
 }
 
+#[derive(Debug, Serialize)]
 pub struct ColorEntry {
     pub full_name: String,
     pub one_char: String,
