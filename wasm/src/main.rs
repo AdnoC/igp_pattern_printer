@@ -18,17 +18,20 @@ thread_local! {
     static APP: RefCell<AppState> = const { RefCell::new(AppState::Uninitialized) };
 }
 
+#[derive(Debug)]
 enum AppState {
     Uninitialized,
     Initializing(InitializationState),
     Running(ipp::App),
 }
 
+#[derive(Debug)]
 enum AppView {
     Uninitialized,
     Initializing{ new_color: Rgb8 },
     Running(AppSnapshot),
 }
+#[derive(Debug)]
 struct AppSnapshot {
     pub rows: Vec<Vec<Rgb8>>,
     pub current_pixel: ipp::NextPreview,
@@ -50,7 +53,7 @@ fn get_view() -> AppView {
     })
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct Config {
     name: String,
     pub color_map: ipp::ColorMap,
@@ -86,6 +89,8 @@ impl Config {
         self.try_save().expect_throw("Could not save");
     }
 }
+
+#[derive(Debug)]
 struct InitializationState {
     pub row_builder: ipp::row_builder::RowBuilder,
     pub config: Config,
@@ -160,6 +165,7 @@ fn Main() -> Html {
         let state = state.clone();
         let initialize_color = move |entry: ColorEntry| {
             let state = state.clone();
+            log!("Initializing with entry: ", &entry.full_name);
 
             APP.with_borrow_mut(|app_state| {
                 use ipp::row_builder::BuildState;
@@ -180,6 +186,7 @@ fn Main() -> Html {
                             },
                             BuildState::NewColor(color) => AppView::Initializing { new_color: color },
                         };
+                        state.set(app_view);
                     },
                     _ => return,
                 }

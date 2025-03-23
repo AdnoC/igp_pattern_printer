@@ -8,6 +8,7 @@ use crate::{
     SEPARATOR_COLOR,
 };
 
+#[derive(Debug)]
 pub struct RowBuilder {
     img: RgbImage,
     rows: Vec<Vec<Rgb8>>,

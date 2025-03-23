@@ -118,11 +118,12 @@ impl Progress {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum NextPreview {
     Pixel(Option<Rgb8>),
     Tri([Option<Rgb8>; 3])
 }
+#[derive(Debug)]
 pub struct App {
     pub lines: Vec<Vec<Rgb8>>,
     pub rows: Vec<Vec<Rgb8>>,
