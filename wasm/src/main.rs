@@ -24,6 +24,7 @@ thread_local! {
     static APP: RefCell<AppState> = const { RefCell::new(AppState::Uninitialized) };
 }
 
+const HEX_MARGIN: u32 = 2;
 #[derive(Debug)]
 enum AppState {
     Uninitialized,
@@ -40,8 +41,8 @@ enum AppView {
 #[derive(Debug, PartialEq, Clone, ImplicitClone)]
 struct AppSnapshot {
     pub rows: IArray<IArray<Pixel>>,
-    pub current_pixel: ipp::NextPreview,
-    pub next_pixel: ipp::NextPreview,
+    pub current_pixel: NextPreview,
+    pub next_pixel: NextPreview,
     pub ensure_current_on_screen: bool,
     pub hex_size: u32,
 }
@@ -49,6 +50,27 @@ struct AppSnapshot {
 struct Pixel {
     color: Rgb8,
     descriptor: Rc<str>,
+}
+#[derive(Clone, Debug, PartialEq, ImplicitClone)]
+enum NextPreview {
+    Pixel(Option<Pixel>),
+    Tri([Option<Pixel>; 3])
+}
+impl NextPreview {
+    fn from_ipp(preview: ipp::NextPreview, color_map: &ipp::ColorMap) -> NextPreview {
+        let map_pixel = |pixel: Rgb8| Pixel {
+            color: pixel,
+            descriptor: color_map.full_name(pixel)
+        };
+        match preview {
+            ipp::NextPreview::Tri(pixels) => NextPreview::Tri([
+                                                              pixels[0].map(map_pixel),
+                                                              pixels[1].map(map_pixel), 
+                                                              pixels[2].map(map_pixel), 
+            ]),
+            ipp::NextPreview::Pixel(pixel) => NextPreview::Pixel(pixel.map(map_pixel)),
+        }
+    }
 }
 fn get_view(app: &AppState) -> AppView {
     match app {
@@ -58,8 +80,8 @@ fn get_view(app: &AppState) -> AppView {
         }
         AppState::Running(app, config) => AppView::Running(AppSnapshot {
             rows: rows_to_iarray(&app.lines, &config.color_map),
-            current_pixel: app.current_pixel,
-            next_pixel: app.next_pixel,
+            current_pixel: NextPreview::from_ipp(app.current_pixel, &config.color_map),
+            next_pixel: NextPreview::from_ipp(app.next_pixel, &config.color_map),
             ensure_current_on_screen: app.ensure_current_on_screen,
             hex_size: config.hex_size,
         }),
@@ -154,8 +176,8 @@ fn Main() -> Html {
                     let app = ipp::App::new(rows, config.progress.clone());
                     let snapshot = AppSnapshot {
                         rows: rows_to_iarray(&app.lines, &config.color_map),
-                        current_pixel: app.current_pixel,
-                        next_pixel: app.next_pixel,
+                        current_pixel: NextPreview::from_ipp(app.current_pixel, &config.color_map),
+                        next_pixel: NextPreview::from_ipp(app.next_pixel, &config.color_map),
                         ensure_current_on_screen: app.ensure_current_on_screen,
                         hex_size: config.hex_size,
                     };
@@ -211,8 +233,8 @@ fn Main() -> Html {
                                 let app = ipp::App::new(rows, init_state.config.progress.clone());
                                 let snapshot = AppSnapshot {
                                     rows: rows_to_iarray(&app.lines, &init_state.config.color_map),
-                                    current_pixel: app.current_pixel,
-                                    next_pixel: app.next_pixel,
+                                    current_pixel: NextPreview::from_ipp(app.current_pixel, &init_state.config.color_map),
+                                    next_pixel: NextPreview::from_ipp(app.next_pixel, &init_state.config.color_map),
                                     ensure_current_on_screen: app.ensure_current_on_screen,
                                     hex_size: init_state.config.hex_size,
                                 };
@@ -264,20 +286,36 @@ fn Main() -> Html {
     }
 }
 
+fn hex_height(size: u32) -> u32 {
+    size * 10 / 9
+}
 #[autoprops]
 #[function_component]
 fn Hexagon(color: &Rgb8, size: u32, name: Option<Rc<str>>) -> Html {
+    // quick and dirty brightness check. Should replace with a more accurate version
+    let font_color = if color.0[0] < 50 && color.0[1] < 50 && color.0[2] < 50 {
+        "white"
+    } else {
+        "black"
+    };
     let style = vec![
-        "display: inline-block;".to_string(),
+        "display: inline-flex;".to_string(),
+        "justify-content: center;".to_string(),
+        "align-items: center;".to_string(),
+        format!("font-size: {}pt;", size / 2),
         format!("background-color: {};", color.to_hex()),
-        "clip-path: polygon(75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%, 25% 0);".to_string(),
-        format!("height: {}px;", size * 9 / 10),
+        format!("color: {};", font_color),
+        "clip-path: polygon(0 75%, 50% 100%, 100% 75%, 100% 25%, 50% 0, 0 25%);".to_string(),
+        format!("height: {}px;", hex_height(size)),
         format!("width: {}px;", size),
+        format!("margin-right: {}px;", HEX_MARGIN),
     ]
     .join(" ");
     html! {
         <div style={style} class="hexagon">
-        {name.as_ref().map(|s| &**s).unwrap_or("")}
+            <span clas="hex-text">
+                {name.as_ref().map(|s| &**s).unwrap_or("")}
+            </span>
         </div>
     }
 }
@@ -361,6 +399,16 @@ fn Ipp_App(app: &AppSnapshot, step: &Callback<()>) -> Html {
     }
 }
 
+fn hex_row_style(hex_size: u32, idx: usize) -> String {
+    let hex_height = hex_height(hex_size);
+    let position = (hex_height * 3 / 4 + HEX_MARGIN) * idx as u32;
+    vec![
+        "position: absolute;".to_string(),
+        format!("top: {}px;", position),
+        "text-wrap: nowrap;".to_string(),
+    ]
+    .join(" ")
+}
 #[autoprops]
 #[function_component]
 fn ImageDisplay(rows: IArray<IArray<Pixel>>, hex_size: u32) -> Html {
@@ -368,9 +416,19 @@ fn ImageDisplay(rows: IArray<IArray<Pixel>>, hex_size: u32) -> Html {
         .iter()
         .map(|row| row.iter().map(|pixel| html! { <Hexagon size={hex_size} color={pixel.color} name={Some(pixel.descriptor)} /> }));
 
-    let hex_rows = hex_rows.map(|row| {
+    let stagger_style = vec![
+        "display: inline-block;".to_string(),
+        format!("width: {}px;", hex_size / 2),
+    ]
+    .join(" ");
+    let stagger_style: Rc<str> = Rc::from(stagger_style.as_ref());
+    let hex_rows = hex_rows.enumerate().map(|(idx, row)| {
         html! {
-            <div>
+            <div class="hex-row" style={hex_row_style(hex_size, idx)}>
+                if idx % 2 == 1 {
+                    <div style={stagger_style.clone()}>
+                    </div>
+                }
                 {row.collect::<Html>()}
             </div>
         }
