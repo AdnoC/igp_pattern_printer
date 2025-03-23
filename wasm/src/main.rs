@@ -1,5 +1,7 @@
 use std::pin::pin;
 use std::{cell::RefCell, rc::Rc, sync::{LazyLock, Mutex}};
+use implicit_clone::unsync::IArray;
+use implicit_clone::ImplicitClone;
 use web_sys::HtmlInputElement;
 use yew::functional;
 use yew_autoprops::autoprops;
@@ -31,9 +33,9 @@ enum AppView {
     Initializing{ new_color: Rgb8 },
     Running(AppSnapshot),
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone, ImplicitClone)]
 struct AppSnapshot {
-    pub rows: Vec<Vec<Rgb8>>,
+    pub rows: IArray<IArray<Rgb8>>,
     pub current_pixel: ipp::NextPreview,
     pub next_pixel: ipp::NextPreview,
     pub ensure_current_on_screen: bool,
@@ -45,12 +47,19 @@ fn get_view() -> AppView {
             unimplemented!()
         },
         AppState::Running(app) => AppView::Running(AppSnapshot {
-            rows: app.rows.clone(),
+            rows: rows_to_iarray(&app.rows),
             current_pixel: app.current_pixel,
             next_pixel: app.next_pixel,
             ensure_current_on_screen: app.ensure_current_on_screen,
         }),
     })
+}
+
+fn rows_to_iarray(rows: &Vec<Vec<Rgb8>>) -> IArray<IArray<Rgb8>> {
+    IArray::from(rows
+                 .iter()
+                 .map(|row| IArray::from(row.clone()))
+                 .collect::<Vec<IArray<Rgb8>>>())
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -118,9 +127,10 @@ fn Main() -> Html {
             let mut config = Config::load(file.name());
             let (app_state, app_view) = match row_builder.build(&mut config.color_map) {
                 BuildState::Complete(rows) => {
+                    config.save();
                     let app = ipp::App::new(rows, config.progress);
                     let snapshot = AppSnapshot {
-                            rows: app.rows.clone(),
+                            rows: rows_to_iarray(&app.rows),
                             current_pixel: app.current_pixel,
                             next_pixel: app.next_pixel,
                             ensure_current_on_screen: app.ensure_current_on_screen,
@@ -174,9 +184,10 @@ fn Main() -> Html {
                     AppState::Initializing(init_state) => {
                         let app_view = match init_state.row_builder.continue_build(entry, &mut init_state.config.color_map) {
                             BuildState::Complete(rows) => {
+                                init_state.config.save();
                                 let app = ipp::App::new(rows, init_state.config.progress.clone());
                                 let snapshot = AppSnapshot {
-                                    rows: app.rows.clone(),
+                                    rows: rows_to_iarray(&app.rows),
                                     current_pixel: app.current_pixel,
                                     next_pixel: app.next_pixel,
                                     ensure_current_on_screen: app.ensure_current_on_screen,
@@ -196,12 +207,12 @@ fn Main() -> Html {
     };
 
     html! {
-        <div style="background-color: red;" ref={drop_ref} ondrop={ondrop} ondragover={ondragover}>
+        <div style="width: 100vw; height: 100vh;" ref={drop_ref} ondrop={ondrop} ondragover={ondragover}>
         {
             match &*state {
                 AppView::Uninitialized => html! { <Landing /> },
                 AppView::Initializing{ new_color } => html! { <ColorPrompt color={*new_color} set_color={initialize_color} /> },
-                AppView::Running(_app) => unimplemented!(),
+                AppView::Running(app) => html! { <Ipp_App app={app} /> },
             }
         }
         </div>
@@ -284,9 +295,10 @@ fn ColorPrompt(color: &Rgb8, set_color: &Callback<ColorEntry>) -> Html {
 
 #[autoprops]
 #[function_component]
-fn Ipp_App(image: Rc<RgbImage>) -> Html {
-    
-    unimplemented!()
+fn Ipp_App(app: &AppSnapshot) -> Html {
+    html! {
+        <p>{"This is where we'd render the app"}</p>
+    }
 }
 
 

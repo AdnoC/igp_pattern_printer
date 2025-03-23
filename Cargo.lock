@@ -1111,6 +1111,7 @@ version = "0.1.0"
 dependencies = [
  "colored",
  "image",
+ "implicit-clone",
  "itertools 0.13.0",
  "ron",
  "serde",
@@ -2294,6 +2295,7 @@ dependencies = [
  "gloo-events 0.2.0",
  "gloo-file 0.3.0",
  "image",
+ "implicit-clone",
  "ipp",
  "ron",
  "send_wrapper",

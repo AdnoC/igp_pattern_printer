@@ -1,4 +1,5 @@
 use image::{Rgb, RgbImage};
+use implicit_clone::ImplicitClone;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -15,7 +16,7 @@ pub fn rgb8_to_true(rgb: Rgb8) -> colored::Color {
     }
 }
 
-#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, PartialOrd, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, PartialOrd, Clone, Copy, Debug, ImplicitClone)]
 pub struct Rgb8(pub [u8; 3]);
 trait ToRgb8 {
     fn to_rgb8(self) -> Rgb8;
@@ -126,7 +127,7 @@ impl Progress {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, ImplicitClone)]
 pub enum NextPreview {
     Pixel(Option<Rgb8>),
     Tri([Option<Rgb8>; 3])
