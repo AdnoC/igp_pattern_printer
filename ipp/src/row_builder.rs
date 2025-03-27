@@ -1,12 +1,5 @@
+use crate::{flood_fill, ColorEntry, ColorMap, Rgb8, ToRgb8, SEPARATOR_COLOR};
 use image::RgbImage;
-use crate::{
-    ColorMap,
-    ColorEntry,
-    flood_fill,
-    Rgb8,
-    ToRgb8,
-    SEPARATOR_COLOR,
-};
 
 #[derive(Debug)]
 pub struct RowBuilder {
@@ -18,9 +11,7 @@ pub struct RowBuilder {
 }
 
 impl RowBuilder {
-    pub fn new(
-        img: RgbImage,
-    ) -> RowBuilder {
+    pub fn new(img: RgbImage) -> RowBuilder {
         RowBuilder {
             img,
             rows: vec![],
@@ -40,7 +31,7 @@ impl RowBuilder {
                     continue 'row;
                 }
                 if !color_map.has(pixel) {
-                    return BuildState::NewColor(pixel)
+                    return BuildState::NewColor(pixel);
                 }
                 self.current_row.push(pixel);
                 flood_fill(&mut self.img, (x, y));
@@ -60,10 +51,9 @@ impl RowBuilder {
         color_map.add_entry(initial_pixel, entry);
         self.build(color_map)
     }
-
 }
 
 pub enum BuildState {
     Complete(Vec<Vec<Rgb8>>),
-    NewColor(Rgb8)
+    NewColor(Rgb8),
 }

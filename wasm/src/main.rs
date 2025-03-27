@@ -56,19 +56,19 @@ struct Pixel {
 #[derive(Clone, Debug, PartialEq, ImplicitClone)]
 enum NextPreview {
     Pixel(Option<Pixel>),
-    Tri([Option<Pixel>; 3])
+    Tri([Option<Pixel>; 3]),
 }
 impl NextPreview {
     fn from_ipp(preview: ipp::NextPreview, color_map: &ipp::ColorMap) -> NextPreview {
         let map_pixel = |pixel: Rgb8| Pixel {
             color: pixel,
-            descriptor: color_map.full_name(pixel)
+            descriptor: color_map.full_name(pixel),
         };
         match preview {
             ipp::NextPreview::Tri(pixels) => NextPreview::Tri([
-                                                              pixels[0].map(map_pixel),
-                                                              pixels[1].map(map_pixel), 
-                                                              pixels[2].map(map_pixel), 
+                pixels[0].map(map_pixel),
+                pixels[1].map(map_pixel),
+                pixels[2].map(map_pixel),
             ]),
             ipp::NextPreview::Pixel(pixel) => NextPreview::Pixel(pixel.map(map_pixel)),
         }
@@ -93,16 +93,17 @@ fn get_view(app: &AppState) -> AppView {
 fn rows_to_iarray(rows: &Vec<Vec<Rgb8>>, color_map: &ipp::ColorMap) -> IArray<IArray<Pixel>> {
     IArray::from(
         rows.iter()
-            .map(|row| IArray::from(row
-                                    .iter()
-                                    .map(|c| Pixel {
-                                        color: *c,
-                                        descriptor: color_map.one_char(*c) 
-                                    })
-                                    .collect::<Vec<Pixel>>()
-                                    )
-                 )
-            .collect::<Vec<IArray<Pixel>>>()
+            .map(|row| {
+                IArray::from(
+                    row.iter()
+                        .map(|c| Pixel {
+                            color: *c,
+                            descriptor: color_map.one_char(*c),
+                        })
+                        .collect::<Vec<Pixel>>(),
+                )
+            })
+            .collect::<Vec<IArray<Pixel>>>(),
     )
 }
 
@@ -243,8 +244,14 @@ fn Main() -> Html {
                                 let app = ipp::App::new(rows, init_state.config.progress.clone());
                                 let snapshot = AppSnapshot {
                                     rows: rows_to_iarray(&app.lines, &init_state.config.color_map),
-                                    current_pixel: NextPreview::from_ipp(app.current_pixel, &init_state.config.color_map),
-                                    next_pixel: NextPreview::from_ipp(app.next_pixel, &init_state.config.color_map),
+                                    current_pixel: NextPreview::from_ipp(
+                                        app.current_pixel,
+                                        &init_state.config.color_map,
+                                    ),
+                                    next_pixel: NextPreview::from_ipp(
+                                        app.next_pixel,
+                                        &init_state.config.color_map,
+                                    ),
                                     ensure_current_on_screen: app.ensure_current_on_screen,
                                     hex_size: init_state.config.hex_size,
                                 };
@@ -267,18 +274,15 @@ fn Main() -> Html {
     let step_app = {
         let state = state.clone();
         let step_app = move |_| {
-            APP.with_borrow_mut(|app_state| {
-                match app_state {
-                    AppState::Running(app, config) => {
-                        app.tick();
-                        config.progress = app.progress.clone();
-                        config.save();
-                        state.set(get_view(app_state));
-                    },
-                    _ => return,
+            APP.with_borrow_mut(|app_state| match app_state {
+                AppState::Running(app, config) => {
+                    app.tick();
+                    config.progress = app.progress.clone();
+                    config.save();
+                    state.set(get_view(app_state));
                 }
+                _ => return,
             });
-
         };
         Callback::from(step_app)
     };
@@ -412,7 +416,7 @@ fn Ipp_App(app: &AppSnapshot, step: &Callback<()>) -> Html {
             "Space" => {
                 e.prevent_default();
                 step.emit(());
-            },
+            }
             _ => (),
         }
     });
@@ -456,7 +460,10 @@ fn DragableBox(children: &Html) -> Html {
             e.prevent_default();
             if let Some(box_elem) = box_ref.cast::<HtmlElement>() {
                 let rect = box_elem.get_bounding_client_rect();
-                start_pos.set(Some((rect.left() as i32 - e.screen_x(), rect.top() as i32 - e.screen_y())));
+                start_pos.set(Some((
+                    rect.left() as i32 - e.screen_x(),
+                    rect.top() as i32 - e.screen_y(),
+                )));
             }
         }
     };
@@ -478,25 +485,25 @@ fn DragableBox(children: &Html) -> Html {
                 start_pos.set(None);
             }
             if let Some(start_pos) = *start_pos {
-                    //e.prevent_default();
-                    log!("Dragging plus.", e.type_());
-                         log!("x=", e.x(), " y=", e.y());
-                    log!("x=", e.client_x(), " y=", e.client_y());
-                    log!("x=", e.screen_x(), " y=", e.screen_y());
-                    log!("x=", e.offset_x(), " y=", e.offset_y());
-                    pos.set((e.screen_x() + start_pos.0, e.screen_y() + start_pos.1));
+                //e.prevent_default();
+                log!("Dragging plus.", e.type_());
+                log!("x=", e.x(), " y=", e.y());
+                log!("x=", e.client_x(), " y=", e.client_y());
+                log!("x=", e.screen_x(), " y=", e.screen_y());
+                log!("x=", e.offset_x(), " y=", e.offset_y());
+                pos.set((e.screen_x() + start_pos.0, e.screen_y() + start_pos.1));
             }
         }
     };
     html! {
-        <div 
+        <div
             onmousemove={onmousemove}
             style={container_style}
             ref={box_ref.clone()}
         >
             <div
-                onmousedown={onmousedown} 
-                onmouseup={onmouseup} 
+                onmousedown={onmousedown}
+                onmouseup={onmouseup}
                 style={dragger_style}
             >
                 <svg::DragPlus size={50} />

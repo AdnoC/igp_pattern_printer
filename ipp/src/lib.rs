@@ -1,8 +1,8 @@
 use image::{Rgb, RgbImage};
 use implicit_clone::ImplicitClone;
 use serde::{Deserialize, Serialize};
-use std::rc::Rc;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 pub mod row_builder;
 
@@ -17,7 +17,9 @@ pub fn rgb8_to_true(rgb: Rgb8) -> colored::Color {
     }
 }
 
-#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, PartialOrd, Clone, Copy, Debug, ImplicitClone)]
+#[derive(
+    Serialize, Deserialize, Hash, Eq, PartialEq, PartialOrd, Clone, Copy, Debug, ImplicitClone,
+)]
 pub struct Rgb8(pub [u8; 3]);
 trait ToRgb8 {
     fn to_rgb8(self) -> Rgb8;
@@ -84,7 +86,6 @@ pub struct ColorEntry {
     pub one_char: String,
 }
 
-
 fn flood_fill(img: &mut RgbImage, (x, y): (u32, u32)) {
     if img[(x, y)].to_rgb8() == SEPARATOR_COLOR {
         return;
@@ -110,7 +111,6 @@ fn flood_fill(img: &mut RgbImage, (x, y): (u32, u32)) {
             points.push((x, y + 1));
         }
     }
-
 }
 
 #[derive(Serialize, Deserialize, Hash, Eq, PartialEq, PartialOrd, Clone, Debug)]
@@ -131,7 +131,7 @@ impl Progress {
 #[derive(Clone, Copy, Debug, PartialEq, ImplicitClone)]
 pub enum NextPreview {
     Pixel(Option<Rgb8>),
-    Tri([Option<Rgb8>; 3])
+    Tri([Option<Rgb8>; 3]),
 }
 #[derive(Debug)]
 pub struct App {
@@ -150,7 +150,6 @@ impl App {
                 rows[1].iter().take(progress.col).cloned().collect(),
                 rows[2].iter().take(progress.col + 1).cloned().collect(),
             ]
-
         } else {
             let mut lines: Vec<Vec<Rgb8>> = rows.iter().take(progress.row).cloned().collect();
             lines.push(
@@ -193,7 +192,6 @@ impl App {
             next_pixel,
             progress,
         }
-
     }
 }
 
@@ -207,17 +205,27 @@ impl App {
             self.progress.row += 1;
             self.progress.col = 0;
             self.lines.push(vec![]);
-            self.current_pixel = NextPreview::Pixel(self.rows.get(self.progress.row).and_then(|row| row.get(0).copied()));
+            self.current_pixel = NextPreview::Pixel(
+                self.rows
+                    .get(self.progress.row)
+                    .and_then(|row| row.get(0).copied()),
+            );
         }
         if self.progress.row < 3 {
-            self.rows[0].get(self.lines[0].len()).map(|val| self.lines[0].push(*val));
-            self.rows[1].get(self.lines[1].len()).map(|val| self.lines[1].push(*val));
-            self.rows[2].get(self.lines[2].len()).map(|val| self.lines[2].push(*val));
+            self.rows[0]
+                .get(self.lines[0].len())
+                .map(|val| self.lines[0].push(*val));
+            self.rows[1]
+                .get(self.lines[1].len())
+                .map(|val| self.lines[1].push(*val));
+            self.rows[2]
+                .get(self.lines[2].len())
+                .map(|val| self.lines[2].push(*val));
         } else {
             if let Some(line) = self.lines.last_mut() {
                 self.rows[self.progress.row]
-                     .get(line.len())
-                     .map(|val| line.push(*val));
+                    .get(line.len())
+                    .map(|val| line.push(*val));
             }
         }
 
@@ -235,7 +243,6 @@ impl App {
     pub fn reset(&mut self) {
         self.progress.reset();
         self.lines = App::initialize_lines(&self.rows, &self.progress);
-
     }
 
     pub fn is_done(&self) -> bool {
@@ -245,7 +252,10 @@ impl App {
 
     pub fn is_done_with_line(&self) -> bool {
         if self.progress.row < 3 {
-            let max_len = self.rows[0].len().max(self.rows[1].len()).max(self.rows[2].len());
+            let max_len = self.rows[0]
+                .len()
+                .max(self.rows[1].len())
+                .max(self.rows[2].len());
             self.progress.col >= max_len
         } else {
             self.progress.col >= self.rows[self.progress.row].len()

@@ -1,13 +1,12 @@
-use itertools::Itertools;
 use crossterm::{
-    event::{
-        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind
-    },
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use directories::ProjectDirs;
 use image::{io::Reader as ImageReader, RgbImage};
+use ipp::*;
+use itertools::Itertools;
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -17,9 +16,6 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
-use ipp::*;
-
-
 
 struct UIState {
     vertical_scroll: ScrollbarState,
@@ -41,7 +37,7 @@ impl UIState {
 fn build_rows(img: RgbImage, color_map: &mut ColorMap) -> Result<Vec<Vec<Rgb8>>, Box<dyn Error>> {
     use colored::Colorize;
     use io::Write;
-    use ipp::row_builder::{ RowBuilder, BuildState };
+    use ipp::row_builder::{BuildState, RowBuilder};
 
     let mut builder = RowBuilder::new(img);
     let mut state = builder.build(color_map);
@@ -63,10 +59,13 @@ fn build_rows(img: RgbImage, color_map: &mut ColorMap) -> Result<Vec<Vec<Rgb8>>,
                 io::stdout().flush()?;
                 io::stdin().read_line(&mut one_char)?;
 
-                state = builder.continue_build(ColorEntry {
-                    full_name: full_name.trim().to_owned(),
-                    one_char: one_char.trim().chars().nth(0).unwrap().to_string()
-                }, color_map);
+                state = builder.continue_build(
+                    ColorEntry {
+                        full_name: full_name.trim().to_owned(),
+                        one_char: one_char.trim().chars().nth(0).unwrap().to_string(),
+                    },
+                    color_map,
+                );
             }
         }
     }
@@ -144,7 +143,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-
 fn setup_tui() -> Result<Terminal<impl Backend + io::Write>, Box<dyn Error>> {
     enable_raw_mode()?;
     let stdout = io::stdout();
@@ -156,11 +154,7 @@ fn setup_tui() -> Result<Terminal<impl Backend + io::Write>, Box<dyn Error>> {
 
 fn teardown_tui() -> Result<(), Box<dyn Error>> {
     disable_raw_mode()?;
-    execute!(
-        io::stdout(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
+    execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
 
     Ok(())
 }
@@ -199,24 +193,28 @@ fn run_app(
                         if ui_state.horizontal_scroll_amount > 0 {
                             ui_state.horizontal_scroll_amount -= 1
                         }
-                    },
+                    }
                     KeyCode::Down | KeyCode::Char('j') => ui_state.vertical_scroll_amount += 1,
                     KeyCode::Up | KeyCode::Char('k') => {
                         if ui_state.vertical_scroll_amount > 0 {
                             ui_state.vertical_scroll_amount -= 1
                         }
-                    },
+                    }
                     KeyCode::Right | KeyCode::Char('l') => ui_state.horizontal_scroll_amount += 1,
                     KeyCode::Char('r') => {
                         app.reset();
-                    },
+                    }
                     KeyCode::Char(' ') => {
                         if !app.is_done() {
                             app.tick()
                         }
-                    },
-                    KeyCode::Char('P') => { for _ in 0..30 { app.tick();} },
-                    _ => {},
+                    }
+                    KeyCode::Char('P') => {
+                        for _ in 0..30 {
+                            app.tick();
+                        }
+                    }
+                    _ => {}
                 }
                 // handle input
             }
@@ -239,7 +237,11 @@ fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap
     let [image_frame, color_frame, instruction_line] = main_layout.areas(f.size());
     let colors_layout = Layout::horizontal([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)]);
     let [current_color_box, next_color_box] = colors_layout.areas(color_frame);
-    let tri_box_layout = Layout::vertical([Constraint::Ratio(1, 3), Constraint::Ratio(1, 3), Constraint::Ratio(1, 3)]);
+    let tri_box_layout = Layout::vertical([
+        Constraint::Ratio(1, 3),
+        Constraint::Ratio(1, 3),
+        Constraint::Ratio(1, 3),
+    ]);
 
     {
         if app.ensure_current_on_screen {
@@ -251,7 +253,8 @@ fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap
                 // Add 1 because we can't see whats behind the top-most border
                 let current_scroll = ui_state.vertical_scroll_amount + 1;
                 // Subtract 1 to account for the 1 we added earlier
-                ui_state.vertical_scroll_amount = ensure_scroll_to_visible(frame_size, content_length, current_scroll) - 1;
+                ui_state.vertical_scroll_amount =
+                    ensure_scroll_to_visible(frame_size, content_length, current_scroll) - 1;
             }
             // horizontal
             {
@@ -261,7 +264,8 @@ fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap
                 // Add 1 because we can't see whats behind the left-most border
                 let current_scroll = ui_state.horizontal_scroll_amount + 1;
                 // Subtract 1 to account for the 1 we added earlier
-                ui_state.horizontal_scroll_amount = ensure_scroll_to_visible(frame_size, content_length, current_scroll) - 1;
+                ui_state.horizontal_scroll_amount =
+                    ensure_scroll_to_visible(frame_size, content_length, current_scroll) - 1;
             }
         }
         app.ensure_current_on_screen = false;
@@ -275,9 +279,13 @@ fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap
         .iter()
         .enumerate()
         .map(|(row_idx, row)| {
-            let mut line = row.iter()
+            let mut line = row
+                .iter()
                 .map(|c| {
-                    Span::styled(color_map.one_char(*c).as_ref().to_owned(), Color::Rgb(c.0[0], c.0[1], c.0[2]))
+                    Span::styled(
+                        color_map.one_char(*c).as_ref().to_owned(),
+                        Color::Rgb(c.0[0], c.0[1], c.0[2]),
+                    )
                 })
                 .intersperse(Span::raw(" "))
                 .collect::<Vec<_>>();
@@ -291,7 +299,9 @@ fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap
         .vertical_scroll
         .content_length(app.lines.len())
         .position(ui_state.vertical_scroll_amount);
-    ui_state.horizontal_scroll = ui_state.horizontal_scroll.position(ui_state.horizontal_scroll_amount);
+    ui_state.horizontal_scroll = ui_state
+        .horizontal_scroll
+        .position(ui_state.horizontal_scroll_amount);
 
     let para = Paragraph::new(text).block(create_block("Pattern")).scroll((
         ui_state.vertical_scroll_amount as u16,
@@ -317,40 +327,39 @@ fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap
 
     let render_color_box = |f: &mut Frame, color: &Rgb8, bounds: &Rect, color_map: &ColorMap| {
         let canvas = Canvas::default()
-            .block(create_block_owned(format!("Current link: {}", color_map.full_name(*color))))
+            .block(create_block_owned(format!(
+                "Current link: {}",
+                color_map.full_name(*color)
+            )))
             .background_color(Color::Rgb(color.0[0], color.0[1], color.0[2]))
-            .x_bounds([
-                0., bounds.width as f64
-            ])
-            .y_bounds([
-                0., bounds.height as f64
-            ])
-            .paint(|_| { });
+            .x_bounds([0., bounds.width as f64])
+            .y_bounds([0., bounds.height as f64])
+            .paint(|_| {});
         f.render_widget(canvas, *bounds);
     };
 
-    let render_single_pixel_preview = |f: &mut Frame, pixel: Option<Rgb8>, bounds: &Rect, empty_block_name: &'static str| {
-        if let Some(current_color) = pixel {
-            render_color_box(f, &current_color, bounds, color_map);
-        } else {
-            let para = Paragraph::new("End of line")
-                .block(create_block(empty_block_name));
-            f.render_widget(para, *bounds);
-        }
-    };
-    let render_tri_pixel_preview = |f: &mut Frame, pixels: [Option<Rgb8>; 3], base_bounds: &Rect| {
-        let tri_box: [Rect; 3] = tri_box_layout.areas(*base_bounds);
-
-        for (bound, pixel) in tri_box.iter().zip(pixels.iter()) {
-            if let Some(pixel) = pixel {
-                render_color_box(f, pixel, bound, color_map);
+    let render_single_pixel_preview =
+        |f: &mut Frame, pixel: Option<Rgb8>, bounds: &Rect, empty_block_name: &'static str| {
+            if let Some(current_color) = pixel {
+                render_color_box(f, &current_color, bounds, color_map);
             } else {
-                let para = Paragraph::new("End of line")
-                    .block(create_block("Link"));
-                f.render_widget(para, *bound);
+                let para = Paragraph::new("End of line").block(create_block(empty_block_name));
+                f.render_widget(para, *bounds);
             }
-        }
-    };
+        };
+    let render_tri_pixel_preview =
+        |f: &mut Frame, pixels: [Option<Rgb8>; 3], base_bounds: &Rect| {
+            let tri_box: [Rect; 3] = tri_box_layout.areas(*base_bounds);
+
+            for (bound, pixel) in tri_box.iter().zip(pixels.iter()) {
+                if let Some(pixel) = pixel {
+                    render_color_box(f, pixel, bound, color_map);
+                } else {
+                    let para = Paragraph::new("End of line").block(create_block("Link"));
+                    f.render_widget(para, *bound);
+                }
+            }
+        };
     match app.current_pixel {
         Pixel(pixel) => render_single_pixel_preview(f, pixel, &current_color_box, "Current link"),
         Tri(pixels) => render_tri_pixel_preview(f, pixels, &current_color_box),
@@ -366,8 +375,11 @@ fn ui(f: &mut Frame, app: &mut App, ui_state: &mut UIState, color_map: &ColorMap
     f.render_widget(controls, instruction_line);
 }
 
-
-fn ensure_scroll_to_visible(frame_size: usize, content_length: usize, current_scroll: usize) -> usize {
+fn ensure_scroll_to_visible(
+    frame_size: usize,
+    content_length: usize,
+    current_scroll: usize,
+) -> usize {
     let lowest_visible = current_scroll;
     let highest_visible = frame_size + current_scroll;
     let overscroll_padding = 2;
@@ -399,7 +411,6 @@ fn print_grid(rows: Vec<Vec<Rgb8>>, color_map: &mut ColorMap) {
         println!();
     }
 }
-
 
 fn append_to_log<T: ToString>(s: T) -> Result<(), Box<dyn Error>> {
     use std::fs::OpenOptions;
