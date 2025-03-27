@@ -155,11 +155,41 @@ struct InitializationState {
     pub config: Config,
 }
 
+fn load_file(data: &[u8], file_name: String, set_view: Callback<AppView>) {
+    use ipp::row_builder::BuildState;
+
+    let img = image::load_from_memory(data).expect_throw("Could not load image");
+    log!("img: {} x {}", img.width(), img.height());
+    let img = img.to_rgb8();
+    let mut row_builder = ipp::row_builder::RowBuilder::new(img);
+    let mut config = Config::load(file_name);
+    let (app_state, app_view) = match row_builder.build(&mut config.color_map) {
+        BuildState::Complete(rows) => {
+            config.save();
+            let app = ipp::App::new(rows, config.progress.clone());
+            let snapshot = AppSnapshot {
+                rows: rows_to_iarray(&app.lines, &config.color_map),
+                current_pixel: NextPreview::from_ipp(app.current_pixel, &config.color_map),
+                next_pixel: NextPreview::from_ipp(app.next_pixel, &config.color_map),
+                ensure_current_on_screen: app.ensure_current_on_screen,
+                hex_size: config.hex_size,
+            };
+            (AppState::Running(app, config), AppView::Running(snapshot))
+        }
+        BuildState::NewColor(color) => (
+            AppState::Initializing(InitializationState {
+                row_builder,
+                config,
+            }),
+            AppView::Initializing { new_color: color },
+        ),
+    };
+    APP.with_borrow_mut(|state| *state = app_state);
+    set_view.emit(app_view)
+}
 #[function_component]
 fn Main() -> Html {
-    async fn file_callback(files: Option<web_sys::FileList>, state: UseStateHandle<AppView>) {
-        use ipp::row_builder::BuildState;
-
+    async fn file_callback(files: Option<web_sys::FileList>, set_view: Callback<AppView>) {
         let files = gloo::file::FileList::from(files.expect_throw("empty files"));
         for file in files.iter() {
             log!("File:", file.name());
@@ -167,49 +197,27 @@ fn Main() -> Html {
                 .await
                 .expect_throw("read file");
             log!("Got data, {:?}", data.len());
-            let img = image::load_from_memory(&data[..]).expect_throw("Could not load image");
-            log!("img: {} x {}", img.width(), img.height());
-            let img = img.to_rgb8();
-            let mut row_builder = ipp::row_builder::RowBuilder::new(img);
-            let mut config = Config::load(file.name());
-            let (app_state, app_view) = match row_builder.build(&mut config.color_map) {
-                BuildState::Complete(rows) => {
-                    config.save();
-                    let app = ipp::App::new(rows, config.progress.clone());
-                    let snapshot = AppSnapshot {
-                        rows: rows_to_iarray(&app.lines, &config.color_map),
-                        current_pixel: NextPreview::from_ipp(app.current_pixel, &config.color_map),
-                        next_pixel: NextPreview::from_ipp(app.next_pixel, &config.color_map),
-                        ensure_current_on_screen: app.ensure_current_on_screen,
-                        hex_size: config.hex_size,
-                    };
-                    (AppState::Running(app, config), AppView::Running(snapshot))
-                }
-                BuildState::NewColor(color) => (
-                    AppState::Initializing(InitializationState {
-                        row_builder,
-                        config,
-                    }),
-                    AppView::Initializing { new_color: color },
-                ),
-            };
-            APP.with_borrow_mut(|state| *state = app_state);
-            state.set(app_view);
+            load_file(&data[..], file.name(), set_view.clone());
         }
     }
     let drop_ref = use_node_ref();
     let state = use_state(|| APP.with_borrow(|app| get_view(app)));
 
+    let set_view = {
+        let state = state.clone();
+        Callback::from(move |view: AppView| state.set(view))
+    };
+
     let ondrop = {
         // let image = Rc::new(image.clone());
-        let state = state.clone();
+        let set_view = set_view.clone();
         move |e: DragEvent| {
-            let state = state.clone();
+            let set_view = set_view.clone();
             e.prevent_default();
             log!("D2");
             let load_future = Box::pin(file_callback(
                 e.data_transfer().expect_throw("no file").files(),
-                state,
+                set_view,
             ));
             spawn_local(load_future);
         }
@@ -279,7 +287,7 @@ fn Main() -> Html {
         <div style="width: 100vw; height: 100vh;" ref={drop_ref} ondrop={ondrop} ondragover={ondragover}>
         {
             match &*state {
-                AppView::Uninitialized => html! { <Landing /> },
+                AppView::Uninitialized => html! { <Landing set_view={set_view.clone()} /> },
                 AppView::Initializing{ new_color } => html! { <ColorPrompt color={*new_color} set_color={initialize_color} /> },
                 AppView::Running(app) => html! { <Ipp_App app={app} step={step_app} /> },
             }
@@ -327,11 +335,20 @@ fn Hexagon(color: &Rgb8, size: u32, name: Option<Rc<str>>) -> Html {
     }
 }
 
+#[autoprops]
 #[function_component]
-fn Landing() -> Html {
+fn Landing(set_view: &Callback<AppView>) -> Html {
+    let use_example_image = {
+        let set_view = set_view.clone();
+        move |_e: MouseEvent| {
+            let mario = include_bytes!("../../Mario standing hex.bmp");
+            load_file(mario, "Mario_Example.bmp".to_string(), set_view.clone());
+        }
+    };
     html! {
         <div>
             <h1>{ "DROP IMAGE HERE" }</h1>
+            <button onclick={use_example_image}>{"Or click this to use an example image"}</button>
             <Hexagon size={50} color={Rgb8([0, 0, 255])} name={None::<Rc<str>>} />
         </div>
     }
