@@ -20,6 +20,8 @@ use yew_hooks::prelude::*;
 
 use gloo::events::EventListener;
 
+mod svg;
+
 thread_local! {
     static APP: RefCell<AppState> = const { RefCell::new(AppState::Uninitialized) };
 }
@@ -304,18 +306,18 @@ fn Hexagon(color: &Rgb8, size: u32, name: Option<Rc<str>>) -> Html {
         .map(|mult| size / mult as u32)
         .unwrap_or(0);
     let style = vec![
-        "display: inline-flex;".to_string(),
-        "justify-content: center;".to_string(),
-        "align-items: center;".to_string(),
-        format!("font-size: {}pt;", font_size),
-        format!("background-color: {};", color.to_hex()),
-        format!("color: {};", font_color),
-        "clip-path: polygon(0 75%, 50% 100%, 100% 75%, 100% 25%, 50% 0, 0 25%);".to_string(),
-        format!("height: {}px;", hex_height(size)),
-        format!("width: {}px;", size),
-        format!("margin-right: {}px;", HEX_MARGIN),
+        "display: inline-flex".to_string(),
+        "justify-content: center".to_string(),
+        "align-items: center".to_string(),
+        format!("font-size: {}pt", font_size),
+        format!("background-color: {}", color.to_hex()),
+        format!("color: {}", font_color),
+        "clip-path: polygon(0 75%, 50% 100%, 100% 75%, 100% 25%, 50% 0, 0 25%)".to_string(),
+        format!("height: {}px", hex_height(size)),
+        format!("width: {}px", size),
+        format!("margin-right: {}px", HEX_MARGIN),
     ]
-    .join(" ");
+    .join("; ");
     html! {
         <div style={style} class="hexagon">
             <span clas="hex-text">
@@ -399,7 +401,91 @@ fn Ipp_App(app: &AppSnapshot, step: &Callback<()>) -> Html {
     });
     html! {
         <div>
+            <DragableBox>
+                {"Hello from box!"}
+            </DragableBox>
             <ImageDisplay hex_size={app.hex_size} rows={app.rows.clone()} />
+        </div>
+    }
+}
+
+#[autoprops]
+#[function_component]
+fn DragableBox(children: &Html) -> Html {
+    let pos = use_state(|| (0, 0));
+    let start_pos = use_state(|| None::<(i32, i32)>);
+    let box_ref = NodeRef::default();
+    let container_style = vec![
+        "position: fixed".to_string(),
+        format!("left: {}px", pos.0),
+        format!("top: {}px", pos.1),
+        "background-color: white".to_string(),
+        "z-index: 5".to_string(),
+    ]
+    .join("; ");
+    let dragger_style = vec![
+        "display: inline-block".to_string(),
+        "background-color: rgb(215, 215, 215)".to_string(),
+        "padding: 7px".to_string(),
+        "width: fit-content".to_string(),
+        "height: fit-content".to_string(),
+    ]
+    .join("; ");
+
+    let onmousedown = {
+        let start_pos = start_pos.clone();
+        let box_ref = box_ref.clone();
+        move |e: MouseEvent| {
+            e.prevent_default();
+            if let Some(box_elem) = box_ref.cast::<HtmlElement>() {
+                let rect = box_elem.get_bounding_client_rect();
+                start_pos.set(Some((rect.left() as i32 - e.screen_x(), rect.top() as i32 - e.screen_y())));
+            }
+        }
+    };
+
+    let onmouseup = {
+        let start_pos = start_pos.clone();
+        move |e: MouseEvent| {
+            e.prevent_default();
+            start_pos.set(None);
+        }
+    };
+    let onmousemove = {
+        let pos = pos.clone();
+        let start_pos = start_pos.clone();
+        move |e: MouseEvent| {
+            const MOUSE_PRIMARY: u16 = 1;
+            e.prevent_default();
+            if e.buttons() & MOUSE_PRIMARY == 0 {
+                start_pos.set(None);
+            }
+            if let Some(start_pos) = *start_pos {
+                    //e.prevent_default();
+                    log!("Dragging plus.", e.type_());
+                         log!("x=", e.x(), " y=", e.y());
+                    log!("x=", e.client_x(), " y=", e.client_y());
+                    log!("x=", e.screen_x(), " y=", e.screen_y());
+                    log!("x=", e.offset_x(), " y=", e.offset_y());
+                    pos.set((e.screen_x() + start_pos.0, e.screen_y() + start_pos.1));
+            }
+        }
+    };
+    html! {
+        <div 
+            onmousemove={onmousemove}
+            style={container_style}
+            ref={box_ref.clone()}
+        >
+            <div
+                onmousedown={onmousedown} 
+                onmouseup={onmouseup} 
+                style={dragger_style}
+            >
+                <svg::DragPlus size={50} />
+            </div>
+            {"Hello!"}
+            { children.clone() }
         </div>
     }
 }
@@ -408,11 +494,11 @@ fn hex_row_style(hex_size: u32, idx: usize) -> String {
     let hex_height = hex_height(hex_size);
     let position = (hex_height * 3 / 4 + HEX_MARGIN) * idx as u32;
     vec![
-        "position: absolute;".to_string(),
-        format!("top: {}px;", position),
-        "text-wrap: nowrap;".to_string(),
+        "position: absolute".to_string(),
+        format!("top: {}px", position),
+        "text-wrap: nowrap".to_string(),
     ]
-    .join(" ")
+    .join("; ")
 }
 #[autoprops]
 #[function_component]
@@ -422,10 +508,10 @@ fn ImageDisplay(rows: IArray<IArray<Pixel>>, hex_size: u32) -> Html {
         .map(|row| row.iter().map(|pixel| html! { <Hexagon size={hex_size} color={pixel.color} name={Some(pixel.descriptor)} /> }));
 
     let stagger_style = vec![
-        "display: inline-block;".to_string(),
-        format!("width: {}px;", hex_size / 2),
+        "display: inline-block".to_string(),
+        format!("width: {}px", hex_size / 2),
     ]
-    .join(" ");
+    .join("; ");
     let stagger_style: Rc<str> = Rc::from(stagger_style.as_ref());
     let hex_rows = hex_rows.enumerate().map(|(idx, row)| {
         html! {

@@ -16,7 +16,7 @@ send_wrapper = "0.6.0"
 serde = { version = "1.0.219", features = ["derive"] }
 wasm-bindgen-futures = { version = "0.4.50", features = ["futures-core"] }
 wasm-logger = "0.2.0"
-web-sys = "0.3.77"
+web-sys = { version = "0.3.77", features = ["Element", "DomRect"]}
 yew = { version = "0.21.0", features = ["csr"] }
 yew-autoprops = "0.4.1"
 yew-hooks = "0.3.3"
