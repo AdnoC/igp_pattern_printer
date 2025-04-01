@@ -21,6 +21,7 @@ use yew_hooks::prelude::*;
 use gloo::events::EventListener;
 
 mod svg;
+mod opfs;
 
 thread_local! {
     static APP: RefCell<AppState> = const { RefCell::new(AppState::Uninitialized) };
@@ -199,6 +200,7 @@ fn Main() -> Html {
                 .expect_throw("read file");
             log!("Got data, {:?}", data.len());
             load_file(&data[..], file.name(), set_view.clone());
+            opfs::save_file(&data[..], file.name()).await;
         }
     }
     let drop_ref = use_node_ref();
@@ -285,6 +287,19 @@ fn Main() -> Html {
             });
         };
         Callback::from(step_app)
+    };
+
+    let load_previous_image = {
+        let set_view = set_view.clone();
+        let load_prev = move |_: bool| {
+            async fn load(set_view: Callback<AppView>) {
+                let data = opfs::load_file().await;
+                load_file(&data[..], "TODO".to_string(), set_view);
+            }
+            spawn_local(Box::pin(load(set_view.clone())));
+
+        };
+        Callback::from(load_prev)
     };
 
     html! {
