@@ -75,6 +75,17 @@ impl NextPreview {
         }
     }
 }
+
+enum Direction {
+    Up,
+    Down,
+}
+#[derive(PartialEq, Clone, ImplicitClone)]
+struct ControlCallbacks {
+    change_hex_size: Callback<Direction>,
+    next_tick: Callback<()>,
+    reset_progress: Callback<()>,
+}
 fn get_view(app: &AppState) -> AppView {
     match app {
         AppState::Uninitialized => AppView::Uninitialized,
@@ -289,6 +300,11 @@ fn Main() -> Html {
         Callback::from(step_app)
     };
 
+    let controls_callback = ControlCallbacks {
+        change_hex_size: Callback::from(|_| {}),
+        next_tick: step_app,
+        reset_progress: Callback::from(|_| {}),
+    };
 
     html! {
         <div style="width: 100vw; height: 100vh;" ref={drop_ref} ondrop={ondrop} ondragover={ondragover}>
@@ -296,7 +312,12 @@ fn Main() -> Html {
             match &*state {
                 AppView::Uninitialized => html! { <Landing set_view={set_view.clone()} /> },
                 AppView::Initializing{ new_color } => html! { <ColorPrompt color={*new_color} set_color={initialize_color} /> },
-                AppView::Running(app) => html! { <Ipp_App app={app} step={step_app} /> },
+                AppView::Running(app) => html! { 
+                    <IppApp 
+                        controls_callbacks={controls_callback}
+                        app={app}
+                    />
+                },
             }
         }
         </div>
@@ -428,8 +449,52 @@ fn ColorPrompt(color: &Rgb8, set_color: &Callback<ColorEntry>) -> Html {
 
 #[autoprops]
 #[function_component]
-fn Ipp_App(app: &AppSnapshot, step: &Callback<()>) -> Html {
-    let step = step.clone();
+fn Preview(name: &String, preview: &NextPreview) -> Html {
+    match preview {
+        NextPreview::Pixel(Some(pixel)) => {
+            log!("Have preview");
+            html! {
+                <div class="preview">
+                    <h3>{name}</h3>
+                    <div>{pixel.descriptor.clone()}</div>
+                    <Hexagon size={30} color={pixel.color} name={None::<Rc<str>>} />
+                </div>
+            }
+        },
+        NextPreview::Tri([Some(p1), Some(p2), Some(p3)]) => {
+            html! {
+                <div class="preview">
+                    <h3>{name}</h3>
+                    <div class="preview-tri-container">
+                        <div class="preview-tri-content">
+                            <div class="preview-color-name">{p1.descriptor.clone()}</div>
+                            <div class="preview-color-name">{p2.descriptor.clone()}</div>
+                            <div class="preview-color-name">{p3.descriptor.clone()}</div>
+                        </div>
+                        <div class="preview-tri-content">
+                            <Hexagon size={30} color={p1.color} name={None::<Rc<str>>} />
+                            <Hexagon size={30} color={p2.color} name={None::<Rc<str>>} />
+                            <Hexagon size={30} color={p3.color} name={None::<Rc<str>>} />
+                        </div>
+                    </div>
+                </div>
+            }
+        },
+        _ => {
+            log!("No preview pixel");
+            html! {
+                <div>
+
+                </div>
+            }
+        }
+    }
+}
+
+#[autoprops]
+#[function_component]
+fn IppApp(app: &AppSnapshot, controls_callbacks: &ControlCallbacks) -> Html {
+    let step = controls_callbacks.next_tick.clone();
     use_event_with_window("keypress", move |e: KeyboardEvent| {
         log!("Key pressed: ", e.code());
         match e.code().as_str() {
@@ -443,7 +508,8 @@ fn Ipp_App(app: &AppSnapshot, step: &Callback<()>) -> Html {
     html! {
         <div>
             <DragableBox>
-                {"Hello from box!"}
+                <Preview name="Current" preview={app.current_pixel.clone()} />
+                <Preview name="Next" preview={app.next_pixel.clone()} />
             </DragableBox>
             <ImageDisplay hex_size={app.hex_size} rows={app.rows.clone()} />
         </div>
@@ -457,17 +523,22 @@ fn DragableBox(children: &Html) -> Html {
     let start_pos = use_state(|| None::<(i32, i32)>);
     let box_ref = NodeRef::default();
     let container_style = vec![
+        "display: flex".to_string(),
         "position: fixed".to_string(),
         format!("left: {}px", pos.0),
         format!("top: {}px", pos.1),
         "background-color: white".to_string(),
         "z-index: 5".to_string(),
+        "padding: 5px".to_string(),
+        "border: 3px".to_string(),
+        "border-style: ridge".to_string(),
     ]
     .join("; ");
     let dragger_style = vec![
         "display: inline-block".to_string(),
         "background-color: rgb(215, 215, 215)".to_string(),
         "padding: 7px".to_string(),
+        "margin: 5px".to_string(),
         "width: fit-content".to_string(),
         "height: fit-content".to_string(),
     ]
@@ -506,11 +577,11 @@ fn DragableBox(children: &Html) -> Html {
             }
             if let Some(start_pos) = *start_pos {
                 //e.prevent_default();
-                log!("Dragging plus.", e.type_());
+                /*log!("Dragging plus.", e.type_());
                 log!("x=", e.x(), " y=", e.y());
                 log!("x=", e.client_x(), " y=", e.client_y());
                 log!("x=", e.screen_x(), " y=", e.screen_y());
-                log!("x=", e.offset_x(), " y=", e.offset_y());
+                log!("x=", e.offset_x(), " y=", e.offset_y());*/
                 pos.set((e.screen_x() + start_pos.0, e.screen_y() + start_pos.1));
             }
         }
@@ -528,7 +599,6 @@ fn DragableBox(children: &Html) -> Html {
             >
                 <svg::DragPlus size={50} />
             </div>
-            {"Hello!"}
             { children.clone() }
         </div>
     }

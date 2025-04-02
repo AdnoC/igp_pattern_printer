@@ -3,12 +3,15 @@
     <head>
         <meta charset="utf-8" />
         <title>Yew App</title>
-    <link rel="modulepreload" href="/wasm-713e70c0907a86f9.js" crossorigin="anonymous" integrity="sha384-5HM7h/R+b1dyOeX3FSP07Pp6bpyEoGSTFNQ9nLMQroi7wnZ4kn8vnIuwbcFvnl+/"><link rel="preload" href="/wasm-713e70c0907a86f9_bg.wasm" crossorigin="anonymous" integrity="sha384-p/ssHswQbJd8CWuRFvhxZaw4oKW+NATYMZQkZCPCEJAjoE+VNEJm5/SJ7eP9c3NN" as="fetch" type="application/wasm"></head>
+	<link rel="stylesheet" href="/style.css">
+	<!-- Needed for trunk dev server -->
+	<link rel="stylesheet" href="/style-82a21c426e6392df.css" integrity="sha384&#x2D;FMB9Lx7N04&#x2F;WGfOvMvu0f1&#x2F;KUCjh&#x2F;RIeOZ49hmMHxXjcCG2Vyu9fBmnqp1ot7Qmp"/>
+    <link rel="modulepreload" href="/wasm-62fbc40bf70879eb.js" crossorigin="anonymous" integrity="sha384-EUNSQv7yKDxxbWry1vZFiVWQzHXe2vZLexkBqqsk0ViAI8NUzlr07Ae0ISZKckNa"><link rel="preload" href="/wasm-62fbc40bf70879eb_bg.wasm" crossorigin="anonymous" integrity="sha384-pDPn9qSiq30/GNDql/QytMKAzrPKE9IWTVEhn6d7MzdxuXMuQAekLw1t0n5mdbXt" as="fetch" type="application/wasm"></head>
     <body>
     
 <script type="module">
-import init, * as bindings from '/wasm-713e70c0907a86f9.js';
-const wasm = await init({ module_or_path: '/wasm-713e70c0907a86f9_bg.wasm' });
+import init, * as bindings from '/wasm-62fbc40bf70879eb.js';
+const wasm = await init({ module_or_path: '/wasm-62fbc40bf70879eb_bg.wasm' });
 
 
 window.wasmBindings = bindings;

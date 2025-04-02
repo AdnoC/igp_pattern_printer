@@ -1,0 +1,20 @@
+.preview:not(:last-child) {
+	border-right: 3px;
+	border-right-style: ridge;
+}
+.preview {
+	padding-left: 5px;
+	padding-right: 5px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+.preview-tri-container {
+	display: flex;
+	gap: 10px;
+}
+.preview-tri-content {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-around;
+}
