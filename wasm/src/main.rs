@@ -289,18 +289,6 @@ fn Main() -> Html {
         Callback::from(step_app)
     };
 
-    let load_previous_image = {
-        let set_view = set_view.clone();
-        let load_prev = move |_: bool| {
-            async fn load(set_view: Callback<AppView>) {
-                let data = opfs::load_file().await;
-                load_file(&data[..], "TODO".to_string(), set_view);
-            }
-            spawn_local(Box::pin(load(set_view.clone())));
-
-        };
-        Callback::from(load_prev)
-    };
 
     html! {
         <div style="width: 100vw; height: 100vh;" ref={drop_ref} ondrop={ondrop} ondragover={ondragover}>
@@ -364,9 +352,26 @@ fn Landing(set_view: &Callback<AppView>) -> Html {
             load_file(mario, "Mario_Example.bmp".to_string(), set_view.clone());
         }
     };
+
+    let load_previous_image = {
+        let set_view = set_view.clone();
+        let load_prev = move |_: MouseEvent| {
+            async fn load(set_view: Callback<AppView>) {
+                let data = opfs::load_file().await;
+                log!("data len: ", data.0.len());
+                load_file(&data.0[..], data.1, set_view);
+            }
+            spawn_local(Box::pin(load(set_view.clone())));
+
+        };
+        Callback::from(load_prev)
+    };
+
     html! {
         <div>
             <h1>{ "DROP IMAGE HERE" }</h1>
+            <button onclick={load_previous_image}>{"Load previously used image"}</button>
+            <br />
             <button onclick={use_example_image}>{"Or click this to use an example image"}</button>
             <Hexagon size={50} color={Rgb8([0, 0, 255])} name={None::<Rc<str>>} />
         </div>

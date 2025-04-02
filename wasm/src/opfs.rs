@@ -41,6 +41,7 @@ async fn save_to_file(data: &[u8], file_name: &str) {
         .expect_throw("Unable to cast to writeable stream")
         .get_writer()
         .expect_throw("Unable to get writer");
+    let _ = JsFuture::from(writer.ready()).await;
     let data = {
         let js_data = Uint8Array::new_with_length(data.len() as u32);
         js_data.copy_from(data);
@@ -49,9 +50,10 @@ async fn save_to_file(data: &[u8], file_name: &str) {
     JsFuture::from(writer.write_with_chunk(&data))
         .await
         .expect_throw("writing failed");
-        log!("saved");
+    log!("saved");
+    let _ = JsFuture::from(writer.close()).await;
 }
-pub async fn load_file(file_name: &str) -> (Vec<u8>, String) {
+pub async fn load_file() -> (Vec<u8>, String) {
     let data = load_from_file(LAST_USED_NAME).await;
     let name = load_from_file(LAST_USED_IMAGE_NAME).await;
     let name = String::from_utf8(name);
