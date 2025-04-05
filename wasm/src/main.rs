@@ -505,11 +505,19 @@ fn IppApp(app: &AppSnapshot, controls_callbacks: &ControlCallbacks) -> Html {
             _ => (),
         }
     });
+    let next_tick = {
+        let controls_callbacks = controls_callbacks.clone();
+        let next_tick = move |_: MouseEvent| {
+            controls_callbacks.next_tick.emit(());
+        };
+        Callback::from(next_tick)
+    };
     html! {
         <div>
             <DragableBox>
                 <Preview name="Current" preview={app.current_pixel.clone()} />
                 <Preview name="Next" preview={app.next_pixel.clone()} />
+                <button class="next-step-btn" onclick={next_tick}>{"Next Link"}</button>
             </DragableBox>
             <ImageDisplay hex_size={app.hex_size} rows={app.rows.clone()} />
         </div>
