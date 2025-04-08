@@ -20,8 +20,8 @@ use yew_hooks::prelude::*;
 
 use gloo::events::EventListener;
 
-mod svg;
 mod opfs;
+mod svg;
 
 thread_local! {
     static APP: RefCell<AppState> = const { RefCell::new(AppState::Uninitialized) };
@@ -312,8 +312,8 @@ fn Main() -> Html {
             match &*state {
                 AppView::Uninitialized => html! { <Landing set_view={set_view.clone()} /> },
                 AppView::Initializing{ new_color } => html! { <ColorPrompt color={*new_color} set_color={initialize_color} /> },
-                AppView::Running(app) => html! { 
-                    <IppApp 
+                AppView::Running(app) => html! {
+                    <IppApp
                         controls_callbacks={controls_callback}
                         app={app}
                     />
@@ -383,7 +383,6 @@ fn Landing(set_view: &Callback<AppView>) -> Html {
                 load_file(&data.0[..], data.1, set_view);
             }
             spawn_local(Box::pin(load(set_view.clone())));
-
         };
         Callback::from(load_prev)
     };
@@ -460,7 +459,7 @@ fn Preview(name: &String, preview: &NextPreview) -> Html {
                     <Hexagon size={30} color={pixel.color} name={None::<Rc<str>>} />
                 </div>
             }
-        },
+        }
         NextPreview::Tri([Some(p1), Some(p2), Some(p3)]) => {
             html! {
                 <div class="preview">
@@ -479,7 +478,7 @@ fn Preview(name: &String, preview: &NextPreview) -> Html {
                     </div>
                 </div>
             }
-        },
+        }
         _ => {
             log!("No preview pixel");
             html! {
@@ -512,11 +511,29 @@ fn IppApp(app: &AppSnapshot, controls_callbacks: &ControlCallbacks) -> Html {
         };
         Callback::from(next_tick)
     };
+    let size_up = {
+        let controls_callbacks = controls_callbacks.clone();
+        let size_up = move |_: MouseEvent| {
+            controls_callbacks.change_hex_size.emit(Direction::Up);
+        };
+        Callback::from(size_up)
+    };
+    let size_down = {
+        let controls_callbacks = controls_callbacks.clone();
+        let size_down = move |_: MouseEvent| {
+            controls_callbacks.change_hex_size.emit(Direction::Down);
+        };
+        Callback::from(size_down)
+    };
     html! {
         <div>
             <DragableBox>
                 <Preview name="Current" preview={app.current_pixel.clone()} />
                 <Preview name="Next" preview={app.next_pixel.clone()} />
+                <div class="size-up-down-container">
+                <button class="size-up-down-btn" onclick={size_up}>{"+"}</button>
+                <button class="size-up-down-btn" onclick={size_down}>{"-"}</button>
+                </div>
                 <button class="next-step-btn" onclick={next_tick}>{"Next Link"}</button>
             </DragableBox>
             <ImageDisplay hex_size={app.hex_size} rows={app.rows.clone()} />

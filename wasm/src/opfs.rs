@@ -1,8 +1,10 @@
 use gloo_console::log;
-use web_sys::{File, WritableStream, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetFileOptions};
 use js_sys::Uint8Array;
-use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{
+    File, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetFileOptions, WritableStream,
+};
 
 const LAST_USED_NAME: &str = "PREV_IMAGE";
 const LAST_USED_IMAGE_NAME: &str = "PREV_IMAGE_NAME";
