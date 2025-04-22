@@ -301,7 +301,21 @@ fn Main() -> Html {
     };
 
     let controls_callback = ControlCallbacks {
-        change_hex_size: Callback::from(|_| {}),
+        change_hex_size: {
+            let state = state.clone();
+            Callback::from(move |dir: Direction| {
+                APP.with_borrow_mut(|app_state| match app_state {
+                    AppState::Running(_, config) => {
+                        match dir {
+                            Direction::Up => config.hex_size += 1,
+                            Direction::Down => config.hex_size -= 1,
+                        };
+                        state.set(get_view(app_state));
+                    },
+                    _ => (),
+                });
+            })
+        },
         next_tick: step_app,
         reset_progress: Callback::from(|_| {}),
     };
