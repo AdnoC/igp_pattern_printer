@@ -560,29 +560,90 @@ fn IppApp(app: &AppSnapshot, controls_callbacks: &ControlCallbacks) -> Html {
 #[autoprops]
 #[function_component]
 fn BodyWithControls(body: &Html, children: &Html) -> Html {
+    let translation = use_state(|| (0, 0));
+    let scale = use_state(|| 1.0);
+    let is_mouse_down = use_state(|| false);
     let container_style = vec![
-        "display: flex".to_string(),
-        "flex-flow: column".to_string(),
+        "overflow: hidden".to_string(),
         "height: 100%".to_string(),
     ]
     .join("; ");
     let controls_style = vec![
         "height: 128px".to_string(),
+        "position: relative".to_string(),
+        "z-index: 5".to_string(),
+        "background-color: white".to_string(),
         "display: flex".to_string(),
         "border-style: inset".to_string(),
     ]
     .join("; ");
     let body_style = vec![
         "position: relative".to_string(),
+        "height: 500vh".to_string(),
+        "width: 500vw".to_string(),
+        "transform: translate3d(-250vw, -250vh, 0px)".to_string(),
+        // format!("transform: translate3d({}px, {}px, 0px)", translation.0, translation.1),
     ]
     .join("; ");
+    let inner_style = vec![
+        "position: relative".to_string(),
+        format!("transform: translate3d({}px, {}px, 0px) scale({})", translation.0, translation.1, *scale),
+    ]
+    .join("; ");
+
+    let onmousedown = {
+        let is_mouse_down = is_mouse_down.clone();
+        move |e: MouseEvent| {
+            e.prevent_default();
+            is_mouse_down.set(true);
+        }
+    };
+
+    let onmouseup = {
+        let is_mouse_down = is_mouse_down.clone();
+        move |e: MouseEvent| {
+            e.prevent_default();
+            is_mouse_down.set(false);
+        }
+    };
+    let onmousemove = {
+        let translation = translation.clone();
+        move |e: MouseEvent| {
+            const MOUSE_PRIMARY: u16 = 1;
+            e.prevent_default();
+            if e.buttons() & MOUSE_PRIMARY == 1 {
+                let trans = *translation;
+                translation.set((trans.0 + e.movement_x(), trans.1 + e.movement_y()));
+            }
+        }
+    };
+    let onwheel = {
+        let scale = scale.clone();
+        move |e: web_sys::WheelEvent| {
+            e.stop_propagation();
+            let scroll_scaler = if e.delta_y() > 0. { 0.9 } else { 1.1 };
+            scale.set(*scale * scroll_scaler);
+        }
+    };
+
     html! {
         <div style={container_style}>
             <div id="controls" style={controls_style}>
                 { children.clone() }
             </div>
-            <div id="app-body" style={body_style}>
-                { body.clone() }
+            <div 
+                id="app-body" 
+                style={body_style}
+                onmousedown={onmousedown}
+                onmouseup={onmouseup}
+                onmousemove={onmousemove}
+                onwheel={onwheel}
+            >
+                <div style="position: absolute; left: 250vw; top: 250vh;">
+                    <div style={inner_style}>
+                        { body.clone() }
+                    </div>
+                </div>
             </div>
         </div>
     }
@@ -676,9 +737,8 @@ fn DragableBox(children: &Html) -> Html {
 }
 
 fn hex_row_style(hex_size: u32, idx: usize) -> String {
-    let hex_top_margin = 10;
     let hex_height = hex_height(hex_size);
-    let position = (hex_height * 3 / 4 + HEX_MARGIN) * idx as u32 + hex_top_margin;
+    let position = (hex_height * 3 / 4 + HEX_MARGIN) * idx as u32;
     vec![
         "position: absolute".to_string(),
         format!("top: {}px", position),
