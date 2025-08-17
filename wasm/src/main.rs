@@ -561,10 +561,13 @@ fn IppApp(app: &AppSnapshot, controls_callbacks: &ControlCallbacks) -> Html {
 #[function_component]
 fn BodyWithControls(body: &Html, children: &Html) -> Html {
     let translation = use_state(|| (0, 0));
+    let tranform_origin = use_state(|| (0, 0));
     let scale = use_state(|| 1.0);
     let is_mouse_down = use_state(|| false);
     let container_style = vec![
         "overflow: hidden".to_string(),
+        "display: flex".to_string(),
+        "flex-direction: column".to_string(),
         "height: 100%".to_string(),
     ]
     .join("; ");
@@ -579,10 +582,7 @@ fn BodyWithControls(body: &Html, children: &Html) -> Html {
     .join("; ");
     let body_style = vec![
         "position: relative".to_string(),
-        "height: 500vh".to_string(),
-        "width: 500vw".to_string(),
-        "transform: translate3d(-250vw, -250vh, 0px)".to_string(),
-        // format!("transform: translate3d({}px, {}px, 0px)", translation.0, translation.1),
+        "flex-grow: 1".to_string(),
     ]
     .join("; ");
     let inner_style = vec![
@@ -639,7 +639,7 @@ fn BodyWithControls(body: &Html, children: &Html) -> Html {
                 onmousemove={onmousemove}
                 onwheel={onwheel}
             >
-                <div style="position: absolute; left: 250vw; top: 250vh;">
+                <div style="position: absolute;">
                     <div style={inner_style}>
                         { body.clone() }
                     </div>
