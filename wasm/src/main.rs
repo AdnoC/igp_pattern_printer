@@ -463,6 +463,11 @@ fn ColorPrompt(color: &Rgb8, set_color: &Callback<ColorEntry>) -> Html {
 #[autoprops]
 #[function_component]
 fn Preview(name: &String, preview: &NextPreview) -> Html {
+    let header_style = vec![
+        "margin-bottom: 0".to_string(),
+        "margin-top: 5px".to_string(),
+    ]
+    .join("; ");
     match preview {
         NextPreview::Pixel(Some(pixel)) => {
             log!("Have preview");
@@ -477,7 +482,7 @@ fn Preview(name: &String, preview: &NextPreview) -> Html {
         NextPreview::Tri([Some(p1), Some(p2), Some(p3)]) => {
             html! {
                 <div class="preview">
-                    <h3>{name}</h3>
+                    <h3 style={header_style}>{name}</h3>
                     <div class="preview-tri-container">
                         <div class="preview-tri-content">
                             <div class="preview-color-name">{p1.descriptor.clone()}</div>
@@ -540,8 +545,7 @@ fn IppApp(app: &AppSnapshot, controls_callbacks: &ControlCallbacks) -> Html {
         Callback::from(size_down)
     };
     html! {
-        <div>
-            <DragableBox>
+            <BodyWithControls body={ html! { <ImageDisplay hex_size={app.hex_size} rows={app.rows.clone()} /> }}>
                 <Preview name="Current" preview={app.current_pixel.clone()} />
                 <Preview name="Next" preview={app.next_pixel.clone()} />
                 <div class="size-up-down-container">
@@ -549,12 +553,40 @@ fn IppApp(app: &AppSnapshot, controls_callbacks: &ControlCallbacks) -> Html {
                 <button class="size-up-down-btn" onclick={size_down}>{"-"}</button>
                 </div>
                 <button class="next-step-btn" onclick={next_tick}>{"Next Link"}</button>
-            </DragableBox>
-            <ImageDisplay hex_size={app.hex_size} rows={app.rows.clone()} />
-        </div>
+            </BodyWithControls>
     }
 }
 
+#[autoprops]
+#[function_component]
+fn BodyWithControls(body: &Html, children: &Html) -> Html {
+    let container_style = vec![
+        "display: flex".to_string(),
+        "flex-flow: column".to_string(),
+        "height: 100%".to_string(),
+    ]
+    .join("; ");
+    let controls_style = vec![
+        "height: 128px".to_string(),
+        "display: flex".to_string(),
+        "border-style: inset".to_string(),
+    ]
+    .join("; ");
+    let body_style = vec![
+        "position: relative".to_string(),
+    ]
+    .join("; ");
+    html! {
+        <div style={container_style}>
+            <div id="controls" style={controls_style}>
+                { children.clone() }
+            </div>
+            <div id="app-body" style={body_style}>
+                { body.clone() }
+            </div>
+        </div>
+    }
+}
 #[autoprops]
 #[function_component]
 fn DragableBox(children: &Html) -> Html {
@@ -644,8 +676,9 @@ fn DragableBox(children: &Html) -> Html {
 }
 
 fn hex_row_style(hex_size: u32, idx: usize) -> String {
+    let hex_top_margin = 10;
     let hex_height = hex_height(hex_size);
-    let position = (hex_height * 3 / 4 + HEX_MARGIN) * idx as u32;
+    let position = (hex_height * 3 / 4 + HEX_MARGIN) * idx as u32 + hex_top_margin;
     vec![
         "position: absolute".to_string(),
         format!("top: {}px", position),
