@@ -52,12 +52,14 @@ button {
 
 #controls {
         height: 128px;
+	width: fit-content;
         position: relative;
         z-index: 5;
 	padding-left: 8px;
+	padding-left: 8px;
         background-color: white;
         display: flex;
-	box-shadow: 0px 5px 5px 0px #4C5148;
+	box-shadow: 5px 5px 5px 0px #4C5148;
 }
 #controls hr {
 	margin-left: 5px;
