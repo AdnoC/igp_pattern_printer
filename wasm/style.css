@@ -65,3 +65,7 @@ button {
 #controls button {
 	margin: 5px;
 }
+
+.color-prompt {
+	padding-left: 8px;
+}

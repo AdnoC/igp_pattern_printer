@@ -459,7 +459,7 @@ fn ColorPrompt(color: &Rgb8, set_color: &Callback<ColorEntry>) -> Html {
         }
     };
     html! {
-        <div>
+        <div clas="color-prompt">
             <p>{"An unknown color was detected. Please give it a name"}</p>
             <p>{format!("Hex code: {}", color.to_hex())}</p>
             <Hexagon size={50} color={*color} name={None::<Rc<str>>} />
