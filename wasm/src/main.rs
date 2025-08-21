@@ -402,12 +402,24 @@ fn Landing(set_view: &Callback<AppView>) -> Html {
     };
 
     html! {
-        <div>
-            <h1>{ "DROP IMAGE HERE" }</h1>
-            <button onclick={load_previous_image}>{"Load previously used image"}</button>
+        <div class="landing">
+            <h1>{ "Irregular Grid Tracker" }</h1>
+            <p>
+                {"If you have created a pattern with the "}
+                <a href="https://www.zlosk.com/pgmg/igp/index.html">{"Irregular Grid Painter"}</a>
+                {" you may have trouble following your plan. I did, thats why this exists to track"}
+                {" your progress creating chainmail art with your chosen pattern."}
+            </p>
+            <p>
+                {"Images must be saved by setting the pattern to one of the \"Hex\" options "}
+                {"and exported via \"Save Patterned Picture\"."}
+            </p>
+            <p>
+                {"You may drag and drop your image onto this page to begin."}
+            </p>
+            <button onclick={load_previous_image}>{"Or Load previously used image"}</button>
             <br />
             <button onclick={use_example_image}>{"Or click this to use an example image"}</button>
-            <Hexagon size={50} color={Rgb8([0, 0, 255])} name={None::<Rc<str>>} />
         </div>
     }
 }
@@ -547,12 +559,18 @@ fn IppApp(app: &AppSnapshot, controls_callbacks: &ControlCallbacks) -> Html {
     html! {
             <BodyWithControls body={ html! { <ImageDisplay hex_size={app.hex_size} rows={app.rows.clone()} /> }}>
                 <Preview name="Current" preview={app.current_pixel.clone()} />
+                <hr />
                 <Preview name="Next" preview={app.next_pixel.clone()} />
-                <div class="size-up-down-container">
-                <button class="size-up-down-btn" onclick={size_up}>{"+"}</button>
-                <button class="size-up-down-btn" onclick={size_down}>{"-"}</button>
-                </div>
-                <button class="next-step-btn" onclick={next_tick}>{"Next Link"}</button>
+                <hr />
+                // <div class="size-up-down-container">
+                // <button class="size-up-down-btn" onclick={size_up}>{"+"}</button>
+                // <button class="size-up-down-btn" onclick={size_down}>{"-"}</button>
+                // </div>
+                <button class="next-step-btn" onclick={next_tick}>
+                    {"Next Link"}
+                    <br />
+                    {"(Space)"}
+                </button>
             </BodyWithControls>
     }
 }
@@ -560,34 +578,15 @@ fn IppApp(app: &AppSnapshot, controls_callbacks: &ControlCallbacks) -> Html {
 #[autoprops]
 #[function_component]
 fn BodyWithControls(body: &Html, children: &Html) -> Html {
-    let translation = use_state(|| (0, 0));
-    let tranform_origin = use_state(|| (0, 0));
+    let translation = use_state(|| (0., 0.));
+    let transform_origin = use_state(|| (0, 0));
     let scale = use_state(|| 1.0);
     let is_mouse_down = use_state(|| false);
-    let container_style = vec![
-        "overflow: hidden".to_string(),
-        "display: flex".to_string(),
-        "flex-direction: column".to_string(),
-        "height: 100%".to_string(),
-    ]
-    .join("; ");
-    let controls_style = vec![
-        "height: 128px".to_string(),
-        "position: relative".to_string(),
-        "z-index: 5".to_string(),
-        "background-color: white".to_string(),
-        "display: flex".to_string(),
-        "border-style: inset".to_string(),
-    ]
-    .join("; ");
-    let body_style = vec![
-        "position: relative".to_string(),
-        "flex-grow: 1".to_string(),
-    ]
-    .join("; ");
     let inner_style = vec![
-        "position: relative".to_string(),
-        format!("transform: translate3d({}px, {}px, 0px) scale({})", translation.0, translation.1, *scale),
+        // format!("transform: translate3d({}px, {}px, 0px) scale({})", translation.0, translation.1, *scale),
+        // format!("transform: scale({}) translate3d({}px, {}px, 0px)", *scale, translation.0, translation.1),
+        format!("transform: matrix({}, 0, 0, {}, {}, {})", *scale, *scale, translation.0, translation.1),
+        // format!("transform-origin: {}px {}px", transform_origin.0, transform_origin.1),
     ]
     .join("; ");
 
@@ -595,6 +594,20 @@ fn BodyWithControls(body: &Html, children: &Html) -> Html {
         let is_mouse_down = is_mouse_down.clone();
         move |e: MouseEvent| {
             e.prevent_default();
+            {
+            use wasm_bindgen::JsCast;
+
+            let target = e.target().and_then(|t| t.dyn_into::<HtmlElement>().ok());
+            let bound_target = e.current_target().and_then(|t| t.dyn_into::<HtmlElement>().ok());
+            let mouse_offset = if let Some(target) = target {
+                if let Some(bound_target) = bound_target {
+                    let target_rect = target.get_bounding_client_rect();
+                    let bound_target_rect = bound_target.get_bounding_client_rect();
+                    (target_rect.x() - bound_target_rect.x(), target_rect.y() - bound_target_rect.y())
+                } else { return }
+            } else { return };
+            log!("cx: {}, {}", e.offset_x(), e.offset_x() as f64 + mouse_offset.0);
+            }
             is_mouse_down.set(true);
         }
     };
@@ -612,37 +625,69 @@ fn BodyWithControls(body: &Html, children: &Html) -> Html {
             const MOUSE_PRIMARY: u16 = 1;
             e.prevent_default();
             if e.buttons() & MOUSE_PRIMARY == 1 {
-                let trans = *translation;
-                translation.set((trans.0 + e.movement_x(), trans.1 + e.movement_y()));
+                translation.set((translation.0 + e.movement_x() as f64, translation.1 + e.movement_y() as f64));
             }
         }
     };
     let onwheel = {
+        #[derive(Copy, Clone)]
+        struct ScaledCoords(f64, f64);
+        impl ScaledCoords {
+            fn from_component(x: f64, y: f64, scale: f64) -> ScaledCoords {
+                ScaledCoords(x / scale, y / scale)
+            }
+
+            fn to_component(self, scale: f64) -> (f64, f64) {
+                (self.0 * scale, self.1 * scale)
+            }
+        }
+
         let scale = scale.clone();
+        let translation = translation.clone();
         move |e: web_sys::WheelEvent| {
+            use wasm_bindgen::JsCast;
             e.stop_propagation();
+
+            let target = e.target().and_then(|t| t.dyn_into::<HtmlElement>().ok());
+            let bound_target = e.current_target().and_then(|t| t.dyn_into::<HtmlElement>().ok());
+            let mouse_offset = if let Some(target) = target {
+                if let Some(bound_target) = bound_target {
+                    let target_rect = target.get_bounding_client_rect();
+                    let bound_target_rect = bound_target.get_bounding_client_rect();
+                    (target_rect.x() - bound_target_rect.x(), target_rect.y() - bound_target_rect.y())
+                } else { return }
+            } else { return };
+            let scale_point_component = (e.offset_x() as f64 + mouse_offset.0, e.offset_y() as f64 + mouse_offset.1); // Will be un-scaled due to coming from parent
+            let scale_point_scaled = ((scale_point_component.0 - translation.0) / *scale, scale_point_component.1);
+            // Ensure coordinates where mouse is remains the same before and after zoom
+
             let scroll_scaler = if e.delta_y() > 0. { 0.9 } else { 1.1 };
-            scale.set(*scale * scroll_scaler);
+            let old_scale = *scale;
+            let new_scale = *scale * scroll_scaler;
+            scale.set(new_scale);
+
+            // log!("tl: ({} - {}) * {} + {}", old_scale, new_scale, scale_point_component.0, translation.0);
+            // let new_translation = (old_scale - new_scale) * scale_point.0 + translation.0;
+            let new_translation = scale_point_component.0 - new_scale * scale_point_scaled.0;
+            log!("{}", format!("t: {} = {} - {} * {}\t{}, {}", new_translation, scale_point_component.0, new_scale, scale_point_scaled.0, old_scale, translation.0));
+            translation.set((new_translation, translation.1));
         }
     };
 
     html! {
-        <div style={container_style}>
-            <div id="controls" style={controls_style}>
+        <div id="body-with-controls">
+            <div id="controls">
                 { children.clone() }
             </div>
             <div 
                 id="app-body" 
-                style={body_style}
                 onmousedown={onmousedown}
                 onmouseup={onmouseup}
                 onmousemove={onmousemove}
                 onwheel={onwheel}
             >
-                <div style="position: absolute;">
-                    <div style={inner_style}>
-                        { body.clone() }
-                    </div>
+                <div style={inner_style}>
+                    { body.clone() }
                 </div>
             </div>
         </div>
