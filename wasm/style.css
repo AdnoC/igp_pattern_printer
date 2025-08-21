@@ -5,6 +5,7 @@ body {
 button {
 	background-color: white;
 	border-radius: 15px;
+	box-shadow: 1px 1px 1px 0px #4C5148;
 }
 .landing {
 	margin-left: 8px;
