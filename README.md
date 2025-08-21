@@ -18,3 +18,7 @@ Run and pass in a filepath to the exported hex image.
 cd tui
 cargo run -- <FILENAME>
 ```
+
+## TODO
+
+Implement touch controls
