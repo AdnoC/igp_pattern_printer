@@ -4,7 +4,13 @@ Takes a hex image created with the [Irregular Grid Painter](https://www.zlosk.co
 
 Created to aid in creating pixel-art chainmail.
 
-## Usage
+A web version is available at https://igp-pattern-printer.adno.page/
+
+## TUI
+
+A terminal UI is available.
+
+### Usage
 
 Run and pass in a filepath to the exported hex image.
 
@@ -12,7 +18,3 @@ Run and pass in a filepath to the exported hex image.
 cd tui
 cargo run -- <FILENAME>
 ```
-
-## Future work
-
-A web version is in progress
