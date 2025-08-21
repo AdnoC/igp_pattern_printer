@@ -558,6 +558,21 @@ fn IppApp(app: &AppSnapshot, controls_callbacks: &ControlCallbacks) -> Html {
     };
     html! {
             <BodyWithControls body={ html! { <ImageDisplay hex_size={app.hex_size} rows={app.rows.clone()} /> }}>
+                <div>
+                    <h3>{"Controls"}</h3>
+                    <p>
+                        {"Use the mouse to drag the viewing area."}
+            <br />
+                        {"Scroll wheel zooms."}
+            <br />
+                        {"Spacebar advances to the next link."}
+                    </p>
+                    <p>
+                    </p>
+                    <p>
+                    </p>
+                </div>
+                <hr />
                 <Preview name="Current" preview={app.current_pixel.clone()} />
                 <hr />
                 <Preview name="Next" preview={app.next_pixel.clone()} />
